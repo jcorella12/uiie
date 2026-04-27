@@ -138,20 +138,21 @@ export function ChecklistRevision({
       if (current?.completado === shouldComplete) continue
 
       upserts.push(
-        supabase
-          .from('expediente_checklist')
-          .upsert({
-            expediente_id: expedienteId,
-            item_id: item.id,
-            completado: shouldComplete,
-            completado_por: null,
-            completado_en: shouldComplete ? new Date().toISOString() : null,
-          }, { onConflict: 'expediente_id,item_id' })
-          .select()
-          .single()
-          .then(({ data }) => {
-            if (data) newMap.set(item.id, data as CheckEntry)
-          })
+        Promise.resolve(
+          supabase
+            .from('expediente_checklist')
+            .upsert({
+              expediente_id: expedienteId,
+              item_id: item.id,
+              completado: shouldComplete,
+              completado_por: null,
+              completado_en: shouldComplete ? new Date().toISOString() : null,
+            }, { onConflict: 'expediente_id,item_id' })
+            .select()
+            .single()
+        ).then(({ data }) => {
+          if (data) newMap.set(item.id, data as CheckEntry)
+        })
       )
     }
 
