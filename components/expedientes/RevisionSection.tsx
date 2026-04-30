@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import {
   Send, CheckCircle2, XCircle, Brain, Loader2, AlertTriangle,
   Info, ChevronDown, ChevronUp, Eye, FileCheck, FileX, RotateCcw,
-  ClipboardCheck, Award, Copy, Check,
+  ClipboardCheck, Award, Copy, Check, Paperclip,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 
@@ -79,10 +79,14 @@ export default function RevisionSection({
   const [loadingCerrar, setLoadingCerrar] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
   // Datos del certificado al momento de emitir
-  const [uuidCert,   setUuidCert  ] = useState('')
-  const [uuidAcuse,  setUuidAcuse ] = useState('')
-  const [numCert,    setNumCert   ] = useState('')
-  const [fechaCert,  setFechaCert ] = useState('')
+  const [uuidCert,      setUuidCert     ] = useState('')
+  const [uuidAcuse,     setUuidAcuse    ] = useState('')
+  const [numCert,       setNumCert      ] = useState('')
+  const [fechaCert,     setFechaCert    ] = useState('')
+  const [archivoCert,   setArchivoCert  ] = useState<File | null>(null)
+  const [archivoAcuse,  setArchivoAcuse ] = useState<File | null>(null)
+  const fileCertRef  = useRef<HTMLInputElement>(null)
+  const fileAcuseRef = useRef<HTMLInputElement>(null)
   const [cerradoInfo, setCerradoInfo] = useState<{
     cerrado_en: string
     inspector: { nombre: string | null; correo: string | null }
@@ -185,7 +189,19 @@ export default function RevisionSection({
         if (!certRes.ok) throw new Error(certData.error ?? 'Error al registrar el certificado')
       }
 
-      // 2. Cerrar el expediente
+      // 2. Subir archivos si se adjuntaron (best-effort, no bloquea el cierre)
+      async function subirArchivo(file: File, tipo: string) {
+        const fd = new FormData()
+        fd.append('file', file)
+        fd.append('tipo', tipo)
+        fd.append('nombre', file.name)
+        fd.append('expediente_id', expedienteId)
+        await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+      }
+      if (archivoCert)  await subirArchivo(archivoCert,  'certificado_cre')
+      if (archivoAcuse) await subirArchivo(archivoAcuse, 'acuse_cre')
+
+      // 3. Cerrar el expediente
       const r = await fetch('/api/expedientes/cerrar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -768,6 +784,45 @@ export default function RevisionSection({
                 </div>
               </div>
 
+              {/* Archivos adjuntos */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-gray-600">Archivos <span className="text-gray-400">(opcional)</span></p>
+                <div className="grid grid-cols-2 gap-3">
+                  {/* PDF Certificado */}
+                  <div>
+                    <input ref={fileCertRef} type="file" accept=".pdf,image/*" className="hidden"
+                      onChange={e => setArchivoCert(e.target.files?.[0] ?? null)} />
+                    <button type="button" onClick={() => fileCertRef.current?.click()}
+                      className={[
+                        'w-full text-left text-xs px-3 py-2 border rounded-lg truncate transition-colors',
+                        archivoCert
+                          ? 'border-brand-green bg-emerald-50 text-emerald-700'
+                          : 'border-dashed border-gray-300 text-gray-400 hover:border-brand-green hover:text-brand-green',
+                      ].join(' ')}
+                    >
+                      <Paperclip className="w-3 h-3 inline mr-1" />
+                      {archivoCert ? archivoCert.name : 'PDF certificado…'}
+                    </button>
+                  </div>
+                  {/* PDF Acuse */}
+                  <div>
+                    <input ref={fileAcuseRef} type="file" accept=".pdf,image/*" className="hidden"
+                      onChange={e => setArchivoAcuse(e.target.files?.[0] ?? null)} />
+                    <button type="button" onClick={() => fileAcuseRef.current?.click()}
+                      className={[
+                        'w-full text-left text-xs px-3 py-2 border rounded-lg truncate transition-colors',
+                        archivoAcuse
+                          ? 'border-brand-green bg-emerald-50 text-emerald-700'
+                          : 'border-dashed border-gray-300 text-gray-400 hover:border-brand-green hover:text-brand-green',
+                      ].join(' ')}
+                    >
+                      <Paperclip className="w-3 h-3 inline mr-1" />
+                      {archivoAcuse ? archivoAcuse.name : 'PDF acuse…'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex gap-3 pt-1">
                 <button
                   onClick={handleCerrar}
@@ -780,7 +835,7 @@ export default function RevisionSection({
                   Registrar y cerrar expediente
                 </button>
                 <button
-                  onClick={() => { setConfirmCerrar(false); setUuidCert(''); setUuidAcuse(''); setNumCert(''); setFechaCert('') }}
+                  onClick={() => { setConfirmCerrar(false); setUuidCert(''); setUuidAcuse(''); setNumCert(''); setFechaCert(''); setArchivoCert(null); setArchivoAcuse(null) }}
                   disabled={loadingCerrar}
                   className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
                 >
