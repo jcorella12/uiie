@@ -442,7 +442,7 @@ export default function PerfilForm({ usuario, inspector }: Props) {
     .slice(0, 2)
 
   return (
-    <div className="p-8 max-w-2xl space-y-6">
+    <div className="p-4 sm:p-8 max-w-2xl space-y-6">
 
       {/* Encabezado */}
       <div className="flex items-center gap-4 mb-8">

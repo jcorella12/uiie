@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { UserRole } from '@/lib/types'
 import Sidebar from './Sidebar'
-import { Info } from 'lucide-react'
+import { Info, Menu, Zap } from 'lucide-react'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -58,6 +58,7 @@ function VersionBadge() {
 export default function DashboardLayout({ children, rol, nombre }: DashboardLayoutProps) {
   const router = useRouter()
   const supabase = createClient()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -67,10 +68,48 @@ export default function DashboardLayout({ children, rol, nombre }: DashboardLayo
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <Sidebar rol={rol} nombre={nombre} onLogout={handleLogout} />
-      <main className="flex-1 overflow-auto">
-        {children}
-      </main>
+
+      {/* ── Backdrop móvil ── */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-30 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      <Sidebar
+        rol={rol}
+        nombre={nombre}
+        onLogout={handleLogout}
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* ── Barra superior solo en móvil ── */}
+        <header className="md:hidden sticky top-0 z-20 bg-[#0A5C47] px-4 py-3 flex items-center gap-3 shadow-md">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="text-white/80 hover:text-white transition-colors p-0.5"
+            aria-label="Abrir menú"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 bg-white/15 rounded-md flex items-center justify-center">
+              <Zap className="w-3.5 h-3.5 text-white" />
+            </div>
+            <span className="text-white font-bold text-sm tracking-wide">CIAE</span>
+            <span className="text-white/40 text-[10px] tracking-wider">UIIE-CRE-021</span>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-auto">
+          {children}
+        </main>
+      </div>
+
       <VersionBadge />
     </div>
   )

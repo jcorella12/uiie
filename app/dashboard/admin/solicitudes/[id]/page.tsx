@@ -82,7 +82,7 @@ export default async function SolicitudDetallePage({ params }: Props) {
   const canTakeAction = ['pendiente', 'en_revision', 'aprobada'].includes(solicitud.status)
 
   return (
-    <div className="p-8 max-w-4xl mx-auto">
+    <div className="p-4 sm:p-8 max-w-4xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Link

@@ -47,7 +47,7 @@ export default async function AsignarFoliosPage({
   const maxSecuencialAsignado: number = (maxAsignadoRow as any)?.numero_secuencial ?? 0
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Asignación de Folios</h1>
         <p className="text-gray-500 text-sm mt-1">

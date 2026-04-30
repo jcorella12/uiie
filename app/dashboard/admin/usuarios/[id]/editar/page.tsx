@@ -159,19 +159,19 @@ export default function EditarUsuarioPage() {
 
   if (loading) {
     return (
-      <div className="p-8 flex items-center gap-3 text-gray-400">
+      <div className="p-4 sm:p-8 flex items-center gap-3 text-gray-400">
         <Loader2 className="w-5 h-5 animate-spin" />
         Cargando usuario…
       </div>
     )
   }
 
-  if (!usuario) return <div className="p-8 text-red-500">Usuario no encontrado.</div>
+  if (!usuario) return <div className="p-4 sm:p-8 text-red-500">Usuario no encontrado.</div>
 
   const clientesDisponibles = clientes.filter(c => !c.usuario_id || c.id === clienteVinculado)
 
   return (
-    <div className="p-8 max-w-2xl mx-auto">
+    <div className="p-4 sm:p-8 max-w-2xl mx-auto">
       <Link
         href="/dashboard/admin/usuarios"
         className="inline-flex items-center gap-1.5 text-sm text-brand-green hover:underline font-medium mb-6"

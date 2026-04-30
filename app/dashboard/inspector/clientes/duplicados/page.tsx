@@ -59,7 +59,7 @@ export default async function DuplicadosPage() {
 
   if (!clientes?.length) {
     return (
-      <div className="p-8">
+      <div className="p-4 sm:p-8">
         <p className="text-gray-400">Sin clientes registrados.</p>
       </div>
     )

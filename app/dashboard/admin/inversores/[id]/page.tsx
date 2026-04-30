@@ -22,7 +22,7 @@ export default async function EditarInversorPage({ params }: Props) {
   if (!inversor) redirect('/dashboard/admin/inversores')
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Editar Inversor</h1>
         <p className="text-gray-500 text-sm mt-1">

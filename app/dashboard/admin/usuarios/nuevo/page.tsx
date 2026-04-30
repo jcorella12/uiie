@@ -63,7 +63,7 @@ export default function NuevoUsuarioPage() {
 
   if (success) {
     return (
-      <div className="p-8 max-w-xl mx-auto">
+      <div className="p-4 sm:p-8 max-w-xl mx-auto">
         <div className="card text-center py-12">
           <CheckCircle2 className="w-12 h-12 text-brand-green mx-auto mb-4" />
           <h2 className="text-xl font-bold text-gray-800 mb-2">Usuario creado</h2>
@@ -78,7 +78,7 @@ export default function NuevoUsuarioPage() {
   }
 
   return (
-    <div className="p-8 max-w-xl mx-auto">
+    <div className="p-4 sm:p-8 max-w-xl mx-auto">
       <Link
         href="/dashboard/admin/usuarios"
         className="inline-flex items-center gap-1.5 text-sm text-brand-green hover:underline font-medium mb-6"

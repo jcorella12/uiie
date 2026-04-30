@@ -34,7 +34,7 @@ export default async function DictamenPage({ params }: Props) {
 
   if (expError || !expediente) {
     return (
-      <div className="p-8">
+      <div className="p-4 sm:p-8">
         <div className="card text-center py-16 text-gray-500">
           <p className="font-semibold text-gray-700">Expediente no encontrado</p>
           <p className="text-sm mt-1">El expediente solicitado no existe o no tienes acceso.</p>
@@ -50,7 +50,7 @@ export default async function DictamenPage({ params }: Props) {
     .maybeSingle()
 
   return (
-    <div className="p-8">
+    <div className="p-4 sm:p-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Dictamen Técnico</h1>
         <p className="text-gray-500 text-sm mt-1">

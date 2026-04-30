@@ -9,7 +9,7 @@ import {
   LayoutDashboard, FileText, FolderOpen, Calendar,
   Users, Settings, LogOut, Zap, ChevronDown,
   ClipboardList, BarChart3, UserCog, Building2, BookUser,
-  Cpu, Globe, FileSpreadsheet, Receipt, UsersRound, Award,
+  Cpu, Globe, FileSpreadsheet, Receipt, UsersRound, Award, X,
 } from 'lucide-react'
 import NotificationBell from './NotificationBell'
 
@@ -203,11 +203,12 @@ function groupHasActive(pathname: string, group: NavGroup) {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean; onNavigate?: () => void }) {
   const Icon = item.icon
   return (
     <Link
       href={item.href}
+      onClick={onNavigate}
       className={cn(
         'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all',
         active
@@ -225,9 +226,11 @@ function NavLink({ item, active }: { item: NavItem; active: boolean }) {
 function GroupSection({
   group,
   pathname,
+  onNavigate,
 }: {
   group: NavGroup
   pathname: string
+  onNavigate?: () => void
 }) {
   const hasActive = groupHasActive(pathname, group)
 
@@ -276,6 +279,7 @@ function GroupSection({
               key={item.href}
               item={item}
               active={isItemActive(pathname, item.href)}
+              onNavigate={onNavigate}
             />
           ))}
         </div>
@@ -286,27 +290,47 @@ function GroupSection({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function Sidebar({ rol, nombre, onLogout }: {
+export default function Sidebar({ rol, nombre, onLogout, isOpen, onClose }: {
   rol: UserRole
   nombre: string
   onLogout: () => void
+  isOpen?: boolean
+  onClose?: () => void
 }) {
   const pathname = useSafePathname()
   const groups = NAV[rol] ?? []
 
   return (
-    <aside className="w-56 bg-[#0A5C47] h-screen sticky top-0 flex flex-col overflow-hidden">
+    <aside className={cn(
+      // Base
+      'w-56 bg-[#0A5C47] h-screen flex flex-col overflow-hidden z-40',
+      // Transición suave
+      'transition-transform duration-300 ease-in-out',
+      // Móvil: drawer fijo a la izquierda, oculto/visible según isOpen
+      'fixed top-0 left-0',
+      isOpen ? 'translate-x-0' : '-translate-x-full',
+      // Desktop: en el flujo normal, siempre visible
+      'md:sticky md:translate-x-0',
+    )}>
 
-      {/* ── Logo ── */}
+      {/* ── Logo + botón cerrar móvil ── */}
       <div className="px-5 py-5 border-b border-white/10">
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-white/15 rounded-lg flex items-center justify-center">
             <Zap className="w-4 h-4 text-white" />
           </div>
-          <div>
+          <div className="flex-1">
             <p className="text-white font-bold text-sm leading-tight">CIAE</p>
             <p className="text-white/50 text-[10px] leading-tight tracking-wide">UIIE-CRE-021</p>
           </div>
+          {/* Botón cerrar — solo móvil */}
+          <button
+            onClick={onClose}
+            className="md:hidden text-white/60 hover:text-white transition-colors p-1 rounded-lg hover:bg-white/10"
+            aria-label="Cerrar menú"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -335,7 +359,7 @@ export default function Sidebar({ rol, nombre, onLogout }: {
             {i > 0 && !group.label && (
               <div className="my-2 border-t border-white/10" />
             )}
-            <GroupSection group={group} pathname={pathname} />
+            <GroupSection group={group} pathname={pathname} onNavigate={onClose} />
           </div>
         ))}
       </nav>
@@ -344,6 +368,7 @@ export default function Sidebar({ rol, nombre, onLogout }: {
       <div className="px-2.5 py-3 border-t border-white/10 space-y-0.5">
         <Link
           href="/dashboard/perfil"
+          onClick={onClose}
           className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-white/60 hover:bg-white/10 hover:text-white transition-all"
         >
           <Settings className="w-4 h-4" />
