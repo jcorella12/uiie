@@ -245,7 +245,7 @@ function InversorSelector({
                         {CERT_LABEL[inv.certificacion] ?? inv.certificacion}
                       </span>
                       {inv.certificado_url && (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500" title="Certificado disponible" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500" aria-label="Certificado disponible" />
                       )}
                     </div>
                   </button>
