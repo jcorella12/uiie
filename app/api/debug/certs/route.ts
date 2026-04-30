@@ -5,10 +5,15 @@ export async function GET() {
   const supabase = await createServiceClient()
 
   // List all tables in public schema
-  const { data: tables, error: tablesErr } = await supabase
-    .rpc('list_tables')
-    .select()
-    .catch(() => ({ data: null, error: { message: 'rpc not available' } }))
+  let tables: any = null
+  let tablesErr: any = null
+  try {
+    const res = await supabase.rpc('list_tables').select()
+    tables = res.data
+    tablesErr = res.error
+  } catch {
+    tablesErr = { message: 'rpc not available' }
+  }
 
   // Try querying information_schema directly
   const { data: schemaInfo, error: schemaErr } = await (supabase as any)
