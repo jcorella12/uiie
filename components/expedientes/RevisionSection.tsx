@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import {
   Send, CheckCircle2, XCircle, Brain, Loader2, AlertTriangle,
   Info, ChevronDown, ChevronUp, Eye, FileCheck, FileX, RotateCcw,
-  ClipboardCheck, Award, Copy, Check, Paperclip,
+  ClipboardCheck, Award, Copy, Check, Paperclip, Sparkles,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 
@@ -87,6 +87,10 @@ export default function RevisionSection({
   const [archivoAcuse,  setArchivoAcuse ] = useState<File | null>(null)
   const fileCertRef  = useRef<HTMLInputElement>(null)
   const fileAcuseRef = useRef<HTMLInputElement>(null)
+  // Lectura automática de PDF
+  const [leyendoCert,    setLeyendoCert   ] = useState(false)
+  const [certLeido,      setCertLeido     ] = useState(false)
+  const [urlVerificacion, setUrlVerificacion] = useState<string | null>(null)
   const [cerradoInfo, setCerradoInfo] = useState<{
     cerrado_en: string
     inspector: { nombre: string | null; correo: string | null }
@@ -101,6 +105,55 @@ export default function RevisionSection({
   const [docsRevisados, setDocsRevisados] = useState<Record<string, boolean>>(
     Object.fromEntries(documentos.map(d => [d.id, d.revisado ?? false]))
   )
+
+  // ── Auto-leer PDF del certificado cuando se sube ────────────────────────
+  useEffect(() => {
+    if (!archivoCert) {
+      setCertLeido(false)
+      setUrlVerificacion(null)
+      return
+    }
+    if (!archivoCert.name.toLowerCase().endsWith('.pdf')) return
+
+    let cancelled = false
+    ;(async () => {
+      setLeyendoCert(true)
+      setCertLeido(false)
+      setUrlVerificacion(null)
+      try {
+        const fd = new FormData()
+        fd.append('file', archivoCert)
+        const res = await fetch('/api/expedientes/certificado/leer', { method: 'POST', body: fd })
+        if (cancelled) return
+        if (!res.ok) return
+        const data = await res.json()
+        if (cancelled) return
+
+        // Extraer UUID de url_verificacion si viene
+        const urlCre: string | undefined = data.url_verificacion
+        if (urlCre) {
+          setUrlVerificacion(urlCre)
+          const match = urlCre.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+          if (match && !uuidCert) setUuidCert(match[0])
+        }
+        if (data.numero_certificado && !numCert) setNumCert(data.numero_certificado)
+        if (data.fecha_emision && !fechaCert) {
+          // Convertir a yyyy-mm-dd si viene en otro formato
+          const d = new Date(data.fecha_emision)
+          if (!isNaN(d.getTime())) {
+            setFechaCert(d.toISOString().split('T')[0])
+          }
+        }
+        setCertLeido(true)
+      } catch {
+        // no bloqueamos
+      } finally {
+        if (!cancelled) setLeyendoCert(false)
+      }
+    })()
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [archivoCert])
 
   // ── Inspector: enviar para revisión ───────────────────────────────────────
   async function handleEnviar() {
@@ -172,14 +225,14 @@ export default function RevisionSection({
     setError(null)
     setLoadingCerrar(true)
     try {
-      // 1. Registrar el certificado en la tabla certificados_cre (si hay UUID)
-      if (uuidCert.trim()) {
+      // 1. Registrar el certificado en la tabla certificados_cre (si hay UUID o PDF leído)
+      if (uuidCert.trim() || certLeido) {
         const certRes = await fetch('/api/cre/certificados', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            numero_certificado: numCert.trim() || uuidCert.trim(),
-            url_cre:            creUrl(uuidCert),
+            numero_certificado: numCert.trim() || uuidCert.trim() || '—',
+            url_cre:            urlVerificacion ?? (uuidCert.trim() ? creUrl(uuidCert) : null),
             url_acuse:          uuidAcuse.trim() ? creUrl(uuidAcuse) : null,
             fecha_emision:      fechaCert || null,
             expediente_id:      expedienteId,
@@ -721,21 +774,28 @@ export default function RevisionSection({
                   Registrar certificado del folio <span className="font-mono text-emerald-700">{folio}</span>
                 </p>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Ingresa el UUID del certificado de la bóveda CRE. Esta acción cierra el expediente definitivamente.
+                  Sube el PDF para que el sistema extraiga los datos automáticamente, o ingresa el UUID manualmente. Esta acción cierra el expediente definitivamente.
                 </p>
               </div>
 
-              {/* UUID certificado (requerido) */}
+              {/* UUID certificado */}
               <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-600">
-                  UUID del certificado <span className="text-red-500">*</span>
+                <label className="block text-xs font-medium text-gray-600 flex items-center gap-1.5">
+                  UUID del certificado
+                  {certLeido
+                    ? <span className="text-emerald-600 font-normal">(extraído del PDF)</span>
+                    : <span className="text-red-500">*</span>
+                  }
                 </label>
                 <input
                   type="text"
                   value={uuidCert}
                   onChange={e => setUuidCert(e.target.value)}
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400"
+                  className={[
+                    'w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400',
+                    certLeido && !uuidCert ? 'border-emerald-300 bg-emerald-50/40' : 'border-gray-200',
+                  ].join(' ')}
                 />
                 {uuidCert && !isValidUuid(uuidCert) && (
                   <p className="text-xs text-amber-600 flex items-center gap-1">
@@ -745,6 +805,11 @@ export default function RevisionSection({
                 {uuidCert && isValidUuid(uuidCert) && (
                   <p className="text-xs text-emerald-600 flex items-center gap-1">
                     <CheckCircle2 className="w-3 h-3" /> URL: {CRE_BOVEDA}/{uuidCert.trim()}&hellip;
+                  </p>
+                )}
+                {!uuidCert && certLeido && (
+                  <p className="text-xs text-emerald-600 flex items-center gap-1">
+                    <Sparkles className="w-3 h-3" /> Se usará la URL del PDF para el certificado
                   </p>
                 )}
               </div>
@@ -786,12 +851,24 @@ export default function RevisionSection({
 
               {/* Archivos adjuntos */}
               <div className="space-y-2">
-                <p className="text-xs font-medium text-gray-600">Archivos <span className="text-gray-400">(opcional)</span></p>
+                <div className="flex items-center gap-2">
+                  <p className="text-xs font-medium text-gray-600">Archivos</p>
+                  {leyendoCert && (
+                    <span className="inline-flex items-center gap-1 text-xs text-purple-600 bg-purple-50 border border-purple-200 rounded-full px-2 py-0.5 animate-pulse">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Leyendo PDF con IA…
+                    </span>
+                  )}
+                  {certLeido && !leyendoCert && (
+                    <span className="inline-flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
+                      <Sparkles className="w-3 h-3" /> Datos extraídos automáticamente
+                    </span>
+                  )}
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   {/* PDF Certificado */}
                   <div>
                     <input ref={fileCertRef} type="file" accept=".pdf,image/*" className="hidden"
-                      onChange={e => setArchivoCert(e.target.files?.[0] ?? null)} />
+                      onChange={e => { setArchivoCert(e.target.files?.[0] ?? null); setCertLeido(false) }} />
                     <button type="button" onClick={() => fileCertRef.current?.click()}
                       className={[
                         'w-full text-left text-xs px-3 py-2 border rounded-lg truncate transition-colors',
@@ -826,7 +903,14 @@ export default function RevisionSection({
               <div className="flex gap-3 pt-1">
                 <button
                   onClick={handleCerrar}
-                  disabled={loadingCerrar || !uuidCert.trim() || !isValidUuid(uuidCert)}
+                  disabled={
+                    loadingCerrar ||
+                    leyendoCert ||
+                    // Necesita UUID válido a menos que el PDF fue leído exitosamente
+                    (!certLeido && (!uuidCert.trim() || !isValidUuid(uuidCert))) ||
+                    // Si tiene UUID pero es inválido, bloquear
+                    (uuidCert.trim() !== '' && !isValidUuid(uuidCert))
+                  }
                   className="flex items-center gap-2 px-5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50"
                 >
                   {loadingCerrar
@@ -835,7 +919,7 @@ export default function RevisionSection({
                   Registrar y cerrar expediente
                 </button>
                 <button
-                  onClick={() => { setConfirmCerrar(false); setUuidCert(''); setUuidAcuse(''); setNumCert(''); setFechaCert(''); setArchivoCert(null); setArchivoAcuse(null) }}
+                  onClick={() => { setConfirmCerrar(false); setUuidCert(''); setUuidAcuse(''); setNumCert(''); setFechaCert(''); setArchivoCert(null); setArchivoAcuse(null); setCertLeido(false); setUrlVerificacion(null) }}
                   disabled={loadingCerrar}
                   className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
                 >
