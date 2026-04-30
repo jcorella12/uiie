@@ -9,7 +9,7 @@ import {
   LayoutDashboard, FileText, FolderOpen, Calendar,
   Users, Settings, LogOut, Zap, ChevronDown,
   ClipboardList, BarChart3, UserCog, Building2, BookUser,
-  Cpu, Globe, FileSpreadsheet, Receipt, UsersRound, Info,
+  Cpu, Globe, FileSpreadsheet, Receipt, UsersRound,
 } from 'lucide-react'
 import NotificationBell from './NotificationBell'
 
@@ -282,51 +282,6 @@ function GroupSection({
   )
 }
 
-// ─── Version badge ────────────────────────────────────────────────────────────
-
-function VersionBadge() {
-  const [show, setShow] = useState(false)
-
-  const sha   = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA
-  const short = sha ? sha.slice(0, 7) : null
-  const raw   = process.env.NEXT_PUBLIC_BUILD_TIME
-  const built = raw
-    ? new Date(raw).toLocaleString('es-MX', {
-        day: '2-digit', month: '2-digit', year: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-      })
-    : null
-
-  return (
-    <div className="relative flex items-center">
-      <button
-        type="button"
-        onMouseEnter={() => setShow(true)}
-        onMouseLeave={() => setShow(false)}
-        onFocus={() => setShow(true)}
-        onBlur={() => setShow(false)}
-        className="p-1.5 rounded-md text-white/30 hover:text-white/60 hover:bg-white/10 transition-colors"
-        aria-label="Información de versión"
-      >
-        <Info className="w-3.5 h-3.5" />
-      </button>
-
-      {show && (
-        <div className="absolute bottom-full left-0 mb-2 z-50 min-w-[160px] bg-gray-900 text-white rounded-lg px-3 py-2 shadow-xl text-[11px] leading-relaxed pointer-events-none">
-          <p className="font-semibold text-white/90 mb-1">Versión actual</p>
-          {short
-            ? <p className="text-white/65 font-mono">SHA: {short}</p>
-            : <p className="text-white/45 italic">Local / dev</p>
-          }
-          {built && <p className="text-white/55">Compilado: {built}</p>}
-          {/* arrow */}
-          <span className="absolute top-full left-3.5 -translate-x-1/2 border-4 border-transparent border-t-gray-900" />
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function Sidebar({ rol, nombre, onLogout }: {
@@ -392,16 +347,13 @@ export default function Sidebar({ rol, nombre, onLogout }: {
           <Settings className="w-4 h-4" />
           Configuración
         </Link>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={onLogout}
-            className="flex-1 flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-white/60 hover:bg-red-500/20 hover:text-red-200 transition-all"
-          >
-            <LogOut className="w-4 h-4" />
-            Cerrar sesión
-          </button>
-          <VersionBadge />
-        </div>
+        <button
+          onClick={onLogout}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-white/60 hover:bg-red-500/20 hover:text-red-200 transition-all"
+        >
+          <LogOut className="w-4 h-4" />
+          Cerrar sesión
+        </button>
       </div>
     </aside>
   )
