@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Zap, MapPin, Calendar, ChevronRight, FolderOpen, CheckCircle2, Clock, Eye } from 'lucide-react'
+import { Zap, MapPin, Calendar, ChevronRight, FolderOpen, CheckCircle2, Clock, Eye, Download, Award } from 'lucide-react'
 import NotificarBtn from '@/components/cliente/NotificarBtn'
 
 const ROLES_STAFF = ['inspector', 'inspector_responsable', 'admin', 'auxiliar']
@@ -89,7 +89,8 @@ export default async function ClientePortal({
     folio:folios_lista_control(numero_folio),
     inspecciones:inspecciones_agenda(status, fecha_hora),
     dictamenes(id),
-    documentos_cliente:documentos_expediente(tipo, subido_por_cliente)
+    documentos_cliente:documentos_expediente(tipo, subido_por_cliente),
+    certificados_cre(id, numero_certificado, url_cre, url_acuse)
   `
 
   // ── Paso 1: expedientes directamente vinculados por cliente_id ───────────
@@ -283,6 +284,7 @@ export default async function ClientePortal({
             const folio = exp.folio as any
             const inspecciones = (exp.inspecciones as any[]) ?? []
             const dictamenes = (exp.dictamenes as any[]) ?? []
+            const certs = (exp.certificados_cre as any[]) ?? []
 
             const folioNum: string = folio?.numero_folio ?? exp.numero_folio ?? '—'
             const tieneInspProgramada = inspecciones.some((i) =>
@@ -304,6 +306,59 @@ export default async function ClientePortal({
             const detailHref = esStaff
               ? `/dashboard/cliente/${exp.id}?preview=${previewClienteId}`
               : `/dashboard/cliente/${exp.id}`
+
+            // ── Expediente cerrado con certificado → card especial ──────────
+            const primerCert = certs[0]
+            if (exp.status === 'cerrado' && primerCert && !esStaff) {
+              return (
+                <div key={exp.id} className="card border-l-4 border-l-brand-green bg-gradient-to-r from-green-50/60 to-white">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <Award className="w-4 h-4 text-brand-green" />
+                        <span className="font-mono font-bold text-brand-green text-base">{folioNum}</span>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                          Completado
+                        </span>
+                      </div>
+                      {primerCert.numero_certificado && (
+                        <p className="text-xs text-gray-500 font-mono pl-6">
+                          Certificado: <span className="font-semibold text-gray-700">{primerCert.numero_certificado}</span>
+                        </p>
+                      )}
+                      {(exp.ciudad || exp.estado_mx) && (
+                        <p className="text-xs text-gray-400 flex items-center gap-1 pl-6">
+                          <MapPin className="w-3 h-3" />
+                          {[exp.ciudad, exp.estado_mx].filter(Boolean).join(', ')}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex flex-col gap-2 shrink-0">
+                      <a
+                        href={primerCert.url_cre}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-brand-green text-white text-xs font-semibold rounded-lg hover:bg-brand-green/90 transition-colors"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Descargar certificado
+                      </a>
+                      {primerCert.url_acuse && (
+                        <a
+                          href={primerCert.url_acuse}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-2 bg-blue-50 text-blue-700 text-xs font-semibold rounded-lg hover:bg-blue-100 transition-colors"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Acuse
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            }
 
             return (
               <div key={exp.id} className="card hover:shadow-md transition-shadow">

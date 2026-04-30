@@ -78,6 +78,11 @@ export default function RevisionSection({
   const { show: showToast, ToastEl } = useToast()
   const [loadingCerrar, setLoadingCerrar] = useState(false)
   const [confirmCerrar, setConfirmCerrar] = useState(false)
+  // Datos del certificado al momento de emitir
+  const [uuidCert,   setUuidCert  ] = useState('')
+  const [uuidAcuse,  setUuidAcuse ] = useState('')
+  const [numCert,    setNumCert   ] = useState('')
+  const [fechaCert,  setFechaCert ] = useState('')
   const [cerradoInfo, setCerradoInfo] = useState<{
     cerrado_en: string
     inspector: { nombre: string | null; correo: string | null }
@@ -150,10 +155,37 @@ export default function RevisionSection({
   }
 
   // ── Admin: emitir certificado y cerrar expediente ────────────────────────
+  const CRE_BOVEDA = 'https://cre-boveda.azurewebsites.net/Api/Documento'
+  function isValidUuid(s: string) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s.trim())
+  }
+  function creUrl(uuid: string) {
+    const u = uuid.trim()
+    return `${CRE_BOVEDA}/${u}?nuevoNombre=${u}.pdf`
+  }
+
   async function handleCerrar() {
     setError(null)
     setLoadingCerrar(true)
     try {
+      // 1. Registrar el certificado en la tabla certificados_cre (si hay UUID)
+      if (uuidCert.trim()) {
+        const certRes = await fetch('/api/cre/certificados', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            numero_certificado: numCert.trim() || uuidCert.trim(),
+            url_cre:            creUrl(uuidCert),
+            url_acuse:          uuidAcuse.trim() ? creUrl(uuidAcuse) : null,
+            fecha_emision:      fechaCert || null,
+            expediente_id:      expedienteId,
+          }),
+        })
+        const certData = await certRes.json()
+        if (!certRes.ok) throw new Error(certData.error ?? 'Error al registrar el certificado')
+      }
+
+      // 2. Cerrar el expediente
       const r = await fetch('/api/expedientes/cerrar', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -667,26 +699,88 @@ export default function RevisionSection({
               Marcar certificado emitido
             </button>
           ) : (
-            <div className="rounded-lg border border-emerald-200 bg-white p-4 space-y-3">
-              <p className="text-sm font-semibold text-gray-800">
-                ¿Confirmas que el certificado fue emitido para el folio <span className="font-mono text-emerald-700">{folio}</span>?
-              </p>
-              <p className="text-xs text-gray-500">
-                Esta acción cierra el expediente definitivamente y notifica al inspector y al cliente.
-              </p>
-              <div className="flex gap-3">
+            <div className="rounded-lg border border-emerald-200 bg-white p-4 space-y-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-800">
+                  Registrar certificado del folio <span className="font-mono text-emerald-700">{folio}</span>
+                </p>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Ingresa el UUID del certificado de la bóveda CRE. Esta acción cierra el expediente definitivamente.
+                </p>
+              </div>
+
+              {/* UUID certificado (requerido) */}
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-600">
+                  UUID del certificado <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={uuidCert}
+                  onChange={e => setUuidCert(e.target.value)}
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400"
+                />
+                {uuidCert && !isValidUuid(uuidCert) && (
+                  <p className="text-xs text-amber-600 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" /> Formato UUID inválido
+                  </p>
+                )}
+                {uuidCert && isValidUuid(uuidCert) && (
+                  <p className="text-xs text-emerald-600 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" /> URL: {CRE_BOVEDA}/{uuidCert.trim()}&hellip;
+                  </p>
+                )}
+              </div>
+
+              {/* UUID acuse (opcional) */}
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-gray-600">UUID del acuse <span className="text-gray-400">(opcional)</span></label>
+                <input
+                  type="text"
+                  value={uuidAcuse}
+                  onChange={e => setUuidAcuse(e.target.value)}
+                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400"
+                />
+              </div>
+
+              {/* Número y fecha (opcionales) */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-600">Número de certificado</label>
+                  <input
+                    type="text"
+                    value={numCert}
+                    onChange={e => setNumCert(e.target.value)}
+                    placeholder="UIIE-CC-00040-2026"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-medium text-gray-600">Fecha de emisión</label>
+                  <input
+                    type="date"
+                    value={fechaCert}
+                    onChange={e => setFechaCert(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-1">
                 <button
                   onClick={handleCerrar}
-                  disabled={loadingCerrar}
+                  disabled={loadingCerrar || !uuidCert.trim() || !isValidUuid(uuidCert)}
                   className="flex items-center gap-2 px-5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50"
                 >
                   {loadingCerrar
                     ? <Loader2 className="w-4 h-4 animate-spin" />
                     : <CheckCircle2 className="w-4 h-4" />}
-                  Sí, confirmar
+                  Registrar y cerrar expediente
                 </button>
                 <button
-                  onClick={() => setConfirmCerrar(false)}
+                  onClick={() => { setConfirmCerrar(false); setUuidCert(''); setUuidAcuse(''); setNumCert(''); setFechaCert('') }}
                   disabled={loadingCerrar}
                   className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
                 >

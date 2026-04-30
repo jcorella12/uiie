@@ -9,7 +9,7 @@ import {
   LayoutDashboard, FileText, FolderOpen, Calendar,
   Users, Settings, LogOut, Zap, ChevronDown,
   ClipboardList, BarChart3, UserCog, Building2, BookUser,
-  Cpu, Globe, FileSpreadsheet, Receipt, UsersRound,
+  Cpu, Globe, FileSpreadsheet, Receipt, UsersRound, Award,
 } from 'lucide-react'
 import NotificationBell from './NotificationBell'
 
@@ -144,6 +144,7 @@ const NAV: Record<UserRole, NavGroup[]> = {
       collapsible: true,
       defaultOpen: false,
       items: [
+        { href: '/dashboard/inspector/certificados',  label: 'Certificados', icon: Award },
         { href: '/dashboard/inspector/inversores',   label: 'Inversores',   icon: Cpu },
         { href: '/dashboard/inspector/conciliacion', label: 'Conciliación', icon: Receipt },
         { href: '/dashboard/inspector/equipo',       label: 'Mi Equipo',    icon: UsersRound },
@@ -164,9 +165,10 @@ const NAV: Record<UserRole, NavGroup[]> = {
       id: 'tramites',
       label: 'Trámites',
       items: [
-        { href: '/dashboard/inspector/solicitudes', label: 'Solicitudes',   icon: ClipboardList },
-        { href: '/dashboard/inspector/clientes',    label: 'Clientes',      icon: Building2 },
-        { href: '/dashboard/admin/testigos',        label: 'Participantes', icon: BookUser },
+        { href: '/dashboard/inspector/solicitudes',   label: 'Solicitudes',   icon: ClipboardList },
+        { href: '/dashboard/inspector/clientes',      label: 'Clientes',      icon: Building2 },
+        { href: '/dashboard/admin/testigos',          label: 'Participantes', icon: BookUser },
+        { href: '/dashboard/inspector/certificados',  label: 'Certificados',  icon: Award },
       ],
     },
   ],
