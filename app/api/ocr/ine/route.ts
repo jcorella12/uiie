@@ -66,18 +66,7 @@ Usa "ambas" si detectas las dos caras.`
 // ─── POST /api/ocr/ine ────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
-  let { data: { user } } = await supabase.auth.getUser()
-
-  // Fallback: leer el token del header Authorization (enviado por el cliente)
-  if (!user) {
-    const authHeader = req.headers.get('authorization')
-    const token = authHeader?.replace(/^Bearer\s+/i, '').trim()
-    if (token) {
-      const { data } = await supabase.auth.getUser(token)
-      user = data.user
-    }
-  }
-
+  const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'No auth' }, { status: 401 })
 
   let formData: FormData

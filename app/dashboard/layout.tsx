@@ -16,12 +16,11 @@ export default async function Layout({ children }: { children: React.ReactNode }
     .eq('id', user.id)
     .single()
 
-  // Fallback: derive role from JWT user_metadata if DB row not ready yet
-  const meta = user.user_metadata as any
-  const rol: UserRole = (usuario?.rol ?? meta?.rol ?? 'inspector') as UserRole
-  const nombre = usuario
-    ? [usuario.nombre, usuario.apellidos].filter(Boolean).join(' ')
-    : (meta?.nombre ?? user.email ?? 'Usuario')
+  // Si no hay perfil en la DB, redirigir a login (no usar JWT como fallback de rol)
+  if (!usuario) redirect('/login')
+
+  const rol: UserRole = usuario.rol as UserRole
+  const nombre = [usuario.nombre, usuario.apellidos].filter(Boolean).join(' ') || (user.email ?? 'Usuario')
 
   return (
     <Suspense fallback={<div className="flex min-h-screen bg-gray-50 items-center justify-center"><span className="text-gray-400 text-sm">Cargando…</span></div>}>

@@ -28,6 +28,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
     }
 
+    const MAX_BYTES = 50 * 1024 * 1024 // 50 MB
+    if (file.size > MAX_BYTES) {
+      return NextResponse.json({ error: 'El archivo no puede superar 50 MB' }, { status: 413 })
+    }
+
     // Verify expediente exists (and non-admin users own it)
     const { data: exp } = await db
       .from('expedientes')

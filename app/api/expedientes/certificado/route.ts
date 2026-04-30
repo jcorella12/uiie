@@ -23,7 +23,7 @@ export async function PATCH(req: NextRequest) {
     // Verify expediente exists and check ownership for non-admins
     const { data: exp } = await db
       .from('expedientes')
-      .select('id, inspector_id')
+      .select('id, inspector_id, status')
       .eq('id', expediente_id)
       .single()
 
@@ -32,6 +32,11 @@ export async function PATCH(req: NextRequest) {
     const esAdmin = ['admin', 'inspector_responsable'].includes(u.rol)
     if (!esAdmin && exp.inspector_id !== user.id) {
       return NextResponse.json({ error: 'No autorizado para este expediente' }, { status: 403 })
+    }
+
+    // No se puede modificar datos del certificado si el expediente ya está cerrado
+    if (exp.status === 'cerrado' && !esAdmin) {
+      return NextResponse.json({ error: 'El expediente está cerrado y no puede modificarse' }, { status: 422 })
     }
 
     const { error } = await db

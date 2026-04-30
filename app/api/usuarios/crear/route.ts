@@ -33,6 +33,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Rol no válido' }, { status: 400 })
   }
 
+  // inspector_responsable no puede crear usuarios con rol 'admin'
+  if (perfil?.rol === 'inspector_responsable' && rol === 'admin') {
+    return NextResponse.json({ error: 'No tienes permiso para crear usuarios con rol administrador' }, { status: 403 })
+  }
+
   // ── Crear usuario en Auth (service role) ─────────────────────────────────
   const admin = await createServiceClient()
 
@@ -68,9 +73,12 @@ export async function POST(req: NextRequest) {
     })
 
   if (dbError) {
-    // No hacer rollback del auth user — dejar consistencia parcial
-    console.error('[crear-usuario] Error insertando en usuarios:', dbError)
-    return NextResponse.json({ error: 'Usuario creado en Auth pero falló el perfil: ' + dbError.message }, { status: 500 })
+    // Rollback: eliminar el usuario de Auth para no dejar registros huérfanos
+    console.error('[crear-usuario] Error insertando en usuarios, haciendo rollback de Auth:', dbError)
+    await admin.auth.admin.deleteUser(newUserId).catch(e =>
+      console.error('[crear-usuario] No se pudo hacer rollback del usuario Auth:', e.message)
+    )
+    return NextResponse.json({ error: 'Error al crear el perfil del usuario. Intenta de nuevo.' }, { status: 500 })
   }
 
   // Si no se dio contraseña, enviar magic link / invite

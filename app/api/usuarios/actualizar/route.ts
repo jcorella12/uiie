@@ -36,6 +36,19 @@ export async function PATCH(req: NextRequest) {
 
   const admin = await createServiceClient()
 
+  // Guardia de elevación de privilegios para inspector_responsable
+  if (perfil?.rol === 'inspector_responsable') {
+    // No puede asignar rol 'admin'
+    if (rol === 'admin') {
+      return NextResponse.json({ error: 'No tienes permiso para asignar el rol de administrador' }, { status: 403 })
+    }
+    // No puede modificar a otro admin
+    const { data: objetivo } = await admin.from('usuarios').select('rol').eq('id', id).single()
+    if (objetivo?.rol === 'admin') {
+      return NextResponse.json({ error: 'No tienes permiso para modificar a un administrador' }, { status: 403 })
+    }
+  }
+
   // ── 1. Actualizar tabla pública usuarios ─────────────────────────────────
   const updatePub: Record<string, unknown> = {}
   if (nombre    !== undefined) updatePub.nombre    = nombre

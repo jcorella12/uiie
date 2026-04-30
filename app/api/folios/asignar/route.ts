@@ -61,8 +61,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Este folio ya fue asignado' }, { status: 400 })
     }
 
-    // Transactional update: mark folio as assigned + update solicitud
-    const { error: folioUpdateError } = await supabase
+    // Update atómico: solo actualiza si asignado=false en este momento (evita race condition)
+    const { data: folioUpdated, error: folioUpdateError } = await supabase
       .from('folios_lista_control')
       .update({
         asignado: true,
@@ -70,8 +70,13 @@ export async function POST(request: NextRequest) {
         fecha_asignacion: new Date().toISOString(),
       })
       .eq('id', folioId)
+      .eq('asignado', false)   // condición atómica: solo si aún no está asignado
+      .select('id')
 
     if (folioUpdateError) throw folioUpdateError
+    if (!folioUpdated || folioUpdated.length === 0) {
+      return NextResponse.json({ error: 'Este folio ya fue asignado por otra operación concurrente' }, { status: 409 })
+    }
 
     const { error: solicitudUpdateError } = await supabase
       .from('solicitudes_folio')

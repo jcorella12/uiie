@@ -54,9 +54,22 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Clientes vinculados solo pueden editar campos de contacto, no datos críticos
+    const fieldsToUpdate = isLinkedClient && !isPrivileged && !isCreator
+      ? (() => {
+          const CAMPOS_CLIENTE: (keyof typeof cleanFields)[] = [
+            'nombre', 'telefono', 'atiende_nombre', 'atiende_telefono',
+            'direccion', 'ciudad', 'estado',
+          ]
+          return Object.fromEntries(
+            Object.entries(cleanFields).filter(([k]) => CAMPOS_CLIENTE.includes(k as any))
+          )
+        })()
+      : cleanFields
+
     const { data, error } = await supabase
       .from('clientes')
-      .update({ ...cleanFields, updated_at: new Date().toISOString() })
+      .update({ ...fieldsToUpdate, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select('id, nombre')
       .single()

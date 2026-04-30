@@ -96,7 +96,7 @@ export default function RevisionSection({
     inspector: { nombre: string | null; correo: string | null }
     cliente: { nombre: string | null; correo: string | null }
   } | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [copiedId, setCopiedId] = useState<'inspector' | 'cliente' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [ultimoEnvio, setUltimoEnvio] = useState<EnvioRevision | null>(ultimoEnvioInicial)
   const [status, setStatus] = useState(expedienteStatus)
@@ -967,13 +967,13 @@ export default function RevisionSection({
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(cerradoInfo.inspector.correo!)
-                      setCopied(true)
-                      setTimeout(() => setCopied(false), 2000)
+                      setCopiedId('inspector')
+                      setTimeout(() => setCopiedId(null), 2000)
                     }}
                     className="text-xs text-gray-400 hover:text-brand-green transition-colors flex items-center gap-1"
                     title="Copiar correo"
                   >
-                    {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedId === 'inspector' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
                 </div>
               )}
@@ -989,13 +989,13 @@ export default function RevisionSection({
                   <button
                     onClick={() => {
                       navigator.clipboard.writeText(cerradoInfo.cliente.correo!)
-                      setCopied(true)
-                      setTimeout(() => setCopied(false), 2000)
+                      setCopiedId('cliente')
+                      setTimeout(() => setCopiedId(null), 2000)
                     }}
                     className="text-xs text-gray-400 hover:text-brand-green transition-colors flex items-center gap-1"
                     title="Copiar correo"
                   >
-                    {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedId === 'cliente' ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
                   </button>
                 </div>
               )}

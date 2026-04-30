@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
     const db = await createServiceClient()
 
-    // If inspector (not admin), verify all expedientes belong to them
+    // If inspector/auxiliar (not admin), verify all expedientes belong to them (or their inspector)
     if (!esAdmin) {
       const ids = ordenes.map(o => o.id)
       const { data: exps } = await db
@@ -34,7 +34,18 @@ export async function POST(req: NextRequest) {
         .select('id, inspector_id')
         .in('id', ids)
 
-      const allMine = (exps ?? []).every(e => e.inspector_id === user.id)
+      // Para auxiliares: buscar su inspector_id en la tabla usuarios
+      let inspectorIdEfectivo = user.id
+      if (u.rol === 'auxiliar') {
+        const { data: auxData } = await db
+          .from('usuarios')
+          .select('inspector_id')
+          .eq('id', user.id)
+          .single()
+        if (auxData?.inspector_id) inspectorIdEfectivo = auxData.inspector_id
+      }
+
+      const allMine = (exps ?? []).every(e => e.inspector_id === inspectorIdEfectivo)
       if (!allMine) {
         return NextResponse.json({ error: 'Solo puedes reordenar tus propios expedientes' }, { status: 403 })
       }
