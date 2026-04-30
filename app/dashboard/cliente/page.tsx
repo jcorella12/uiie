@@ -35,7 +35,7 @@ export default async function ClientePortal({
 
   const { data: usuario } = await supabase
     .from('usuarios')
-    .select('rol, nombre, debe_cambiar_password')
+    .select('rol, nombre')
     .eq('id', user.id)
     .single()
 
@@ -46,8 +46,15 @@ export default async function ClientePortal({
   if (esStaff && !previewClienteId) redirect('/dashboard/inspector/clientes')
   if (!esStaff && usuario?.rol !== 'cliente') redirect('/dashboard')
 
-  // Contraseña temporal pendiente de cambio → redirigir
-  if (!esStaff && usuario?.debe_cambiar_password) redirect('/dashboard/cliente/cambiar-password')
+  // Contraseña temporal pendiente de cambio → redirigir (columna puede no existir aún)
+  if (!esStaff) {
+    const { data: flags } = await supabase
+      .from('usuarios')
+      .select('debe_cambiar_password')
+      .eq('id', user.id)
+      .single()
+    if (flags?.debe_cambiar_password) redirect('/dashboard/cliente/cambiar-password')
+  }
 
   // Obtener el registro de cliente
   let clienteRecord: { id: string; nombre: string; ciudad?: string; estado?: string } | null = null
