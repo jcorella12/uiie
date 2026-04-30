@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { renderToBuffer } from '@react-pdf/renderer'
-import { ActaDoc } from '@/lib/pdf/ActaDoc'
-import type { ActaData } from '@/lib/pdf/ActaDoc'
-import { createElement } from 'react'
+import { generarActaDocx } from '@/lib/docx/ActaDocx'
+import type { ActaData } from '@/lib/docx/ActaDocx'
 import path from 'path'
 import fs from 'fs'
 
@@ -59,15 +57,19 @@ export async function GET(req: NextRequest) {
     .limit(1)
     .maybeSingle()
 
-  // ── Inspección realizada más reciente ─────────────────────────────────────
-  const { data: inspeccion } = await supabase
+  // ── Inspección: preferir 'realizada', luego 'en_curso', luego 'programada' ──
+  const { data: inspeccionesRaw } = await supabase
     .from('inspecciones_agenda')
-    .select('fecha_hora, duracion_min, direccion')
+    .select('fecha_hora, duracion_min, direccion, status, inspector_ejecutor:usuarios!inspector_ejecutor_id(nombre, apellidos)')
     .eq('expediente_id', id)
-    .eq('status', 'realizada')
+    .in('status', ['programada', 'en_curso', 'realizada'])
     .order('fecha_hora', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+    .limit(5)
+
+  const STATUS_PRIO: Record<string, number> = { realizada: 0, en_curso: 1, programada: 2 }
+  const inspeccion = (inspeccionesRaw ?? [])
+    .slice()
+    .sort((a: any, b: any) => (STATUS_PRIO[a.status] ?? 9) - (STATUS_PRIO[b.status] ?? 9))[0] ?? null
 
   // ── Mapeos ────────────────────────────────────────────────────────────────
   const testigos = (exp.testigos as any[]) ?? []
@@ -91,7 +93,11 @@ export async function GET(req: NextRequest) {
         .toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
     : '12:00'
 
-  const inspectorNombre = inspUser
+  // Si la inspección tiene un inspector ejecutor diferente, usar ese nombre en el acta
+  const ejecutorUser = (inspeccion as any)?.inspector_ejecutor as { nombre: string; apellidos?: string } | null
+  const inspectorNombre = ejecutorUser
+    ? `${ejecutorUser.nombre} ${ejecutorUser.apellidos ?? ''}`.trim()
+    : inspUser
     ? `${inspUser.nombre} ${inspUser.apellidos ?? ''}`.trim()
     : 'Inspector UIIE'
 
@@ -146,7 +152,9 @@ export async function GET(req: NextRequest) {
     potencia_panel_wp: exp.potencia_panel_wp ?? undefined,
 
     // Medidor
-    numero_medidor: exp.numero_medidor ?? '—',
+    numero_medidor:        exp.numero_medidor         ?? '—',
+    numero_serie_medidor:  (exp as any).numero_serie_medidor  ?? undefined,
+    numero_cfe_medidor:    (exp as any).numero_cfe_medidor    ?? undefined,
 
     // Inversores
     num_inversores:       exp.num_inversores ?? 1,
@@ -180,12 +188,12 @@ export async function GET(req: NextRequest) {
     notas_acta: exp.notas_acta ?? undefined,
   }
 
-  const buffer = await renderToBuffer(createElement(ActaDoc, { datos }) as any)
+  const buffer = await generarActaDocx(datos)
 
   return new NextResponse(buffer as any, {
     headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="Acta-${folio}.pdf"`,
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'Content-Disposition': `attachment; filename="Acta-${folio}.docx"`,
       'Cache-Control': 'no-store',
     },
   })

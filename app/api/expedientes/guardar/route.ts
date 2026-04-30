@@ -18,6 +18,8 @@ const CAMPOS_EXPEDIENTE = [
   'tipo_conexion',
   'tipo_central',
   'numero_medidor',
+  'numero_serie_medidor',
+  'numero_cfe_medidor',
   'resolutivo_folio',
   'resolutivo_fecha',
   'resolutivo_tiene_cobro',

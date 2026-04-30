@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, CheckCircle, Loader2, ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Loader2, ArrowLeft, ChevronLeft, ChevronRight, UserCheck, X } from 'lucide-react'
 import Link from 'next/link'
 
 interface Expediente {
@@ -19,6 +19,12 @@ interface Testigo {
   empresa?: string | null
 }
 
+interface Inspector {
+  id: string
+  nombre: string
+  apellidos?: string | null
+}
+
 interface InspeccionExistente {
   fecha_hora: string
   numero_folio?: string | null
@@ -30,6 +36,9 @@ interface InspeccionExistente {
 interface Props {
   expedientes: Expediente[]
   testigos: Testigo[]
+  inspectores?: Inspector[]
+  currentUserId?: string
+  currentUserNombre?: string
   defaultExpedienteId?: string
   showInspector?: boolean
   inspeccionesExistentes?: InspeccionExistente[]
@@ -219,22 +228,58 @@ function Calendario({
 export default function NuevaInspeccionForm({
   expedientes,
   testigos,
+  inspectores = [],
+  currentUserId = '',
+  currentUserNombre = '',
   defaultExpedienteId,
   showInspector = false,
   inspeccionesExistentes = [],
 }: Props) {
   const router = useRouter()
 
-  const [expedienteId, setExpedienteId] = useState(defaultExpedienteId ?? '')
-  const [selectedDate, setSelectedDate] = useState('')   // YYYY-MM-DD
-  const [selectedTime, setSelectedTime] = useState('09:00')
-  const [duracionMin,  setDuracionMin]  = useState(120)
-  const [testigoId,    setTestigoId]    = useState('')
-  const [notas,        setNotas]        = useState('')
+  const [expedienteId,       setExpedienteId]       = useState(defaultExpedienteId ?? '')
+  const [selectedDate,       setSelectedDate]       = useState('')   // YYYY-MM-DD
+  const [selectedTime,       setSelectedTime]       = useState('09:00')
+  const [duracionMin,        setDuracionMin]        = useState(120)
+  const [testigoId,          setTestigoId]          = useState('')
+  const [notas,              setNotas]              = useState('')
+  const [inspectorEjecutorId, setInspectorEjecutorId] = useState(currentUserId)
+
+  // Dialog de confirmación cuando se elige otro inspector
+  const [pendingEjecutorId, setPendingEjecutorId] = useState<string | null>(null)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+
+  // Nombre del inspector ejecutor actualmente seleccionado
+  const inspectorEjecutorNombre = useMemo(() => {
+    if (inspectorEjecutorId === currentUserId) return currentUserNombre
+    const found = inspectores.find(i => i.id === inspectorEjecutorId)
+    return found ? `${found.nombre} ${found.apellidos ?? ''}`.trim() : ''
+  }, [inspectorEjecutorId, currentUserId, currentUserNombre, inspectores])
+
+  // Cuando seleccionan otro inspector: mostrar diálogo de confirmación
+  function handleInspectorChange(newId: string) {
+    if (newId === currentUserId) {
+      setInspectorEjecutorId(newId)
+      return
+    }
+    setPendingEjecutorId(newId)
+    setShowConfirmDialog(true)
+  }
+
+  function confirmInspectorChange() {
+    if (pendingEjecutorId) setInspectorEjecutorId(pendingEjecutorId)
+    setPendingEjecutorId(null)
+    setShowConfirmDialog(false)
+  }
+
+  function cancelInspectorChange() {
+    setPendingEjecutorId(null)
+    setShowConfirmDialog(false)
+  }
 
   // Mapa de días YYYY-MM-DD → lista de inspecciones
   const inspeccionesPorDia = useMemo<Map<string, InspeccionExistente[]>>(() => {
@@ -269,12 +314,15 @@ export default function NuevaInspeccionForm({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          expediente_id: expedienteId || null,
-          fecha_hora:    fechaHora,
-          duracion_min:  duracionMin,
-          direccion:     null,
-          testigo_id:    testigoId || null,
-          notas:         notas.trim() || null,
+          expediente_id:        expedienteId || null,
+          fecha_hora:           fechaHora,
+          duracion_min:         duracionMin,
+          direccion:            null,
+          testigo_id:           testigoId || null,
+          notas:                notas.trim() || null,
+          inspector_ejecutor_id: inspectorEjecutorId !== currentUserId
+            ? inspectorEjecutorId
+            : null,
         }),
       })
 
@@ -410,6 +458,48 @@ export default function NuevaInspeccionForm({
         )}
       </div>
 
+      {/* Inspector que realiza la visita */}
+      {inspectores.length > 1 && (
+        <div className="card space-y-4">
+          <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+            <UserCheck size={15} className="text-[#0F6E56]" />
+            <h2 className="font-semibold text-gray-800 text-base">
+              Inspector que realiza la visita
+            </h2>
+          </div>
+
+          <select
+            className="input-field"
+            value={inspectorEjecutorId}
+            onChange={e => handleInspectorChange(e.target.value)}
+          >
+            {inspectores.map(i => {
+              const nombre = `${i.nombre} ${i.apellidos ?? ''}`.trim()
+              return (
+                <option key={i.id} value={i.id}>
+                  {nombre}{i.id === currentUserId ? ' (yo)' : ''}
+                </option>
+              )
+            })}
+          </select>
+
+          {/* Aviso cuando se selecciona otro inspector */}
+          {inspectorEjecutorId !== currentUserId && (
+            <div className="flex items-start gap-3 bg-amber-50 border border-amber-300 rounded-xl px-4 py-3 text-sm">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5 text-amber-500" />
+              <div>
+                <p className="font-semibold text-amber-800">Delegación activa</p>
+                <p className="text-amber-700 text-xs mt-0.5">
+                  La visita quedará registrada a nombre de{' '}
+                  <span className="font-semibold">{inspectorEjecutorNombre}</span>.
+                  Asegúrate de contar con su autorización.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Testigo */}
       {testigos.length > 0 && (
         <div className="card space-y-4">
@@ -472,6 +562,72 @@ export default function NuevaInspeccionForm({
           }
         </button>
       </div>
+
+      {/* ── Diálogo de confirmación de delegación ──────────────────────────────── */}
+      {showConfirmDialog && (() => {
+        const pending = inspectores.find(i => i.id === pendingEjecutorId)
+        const pendingNombre = pending
+          ? `${pending.nombre} ${pending.apellidos ?? ''}`.trim()
+          : ''
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
+              {/* Header */}
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-gray-900 text-base">Usar nombre de otro inspector</h3>
+                    <p className="text-xs text-gray-400 mt-0.5">Confirmación requerida</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={cancelInspectorChange}
+                  className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Cuerpo */}
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800 space-y-2">
+                <p>
+                  Estás a punto de registrar esta inspección bajo el nombre de{' '}
+                  <span className="font-semibold">{pendingNombre}</span>.
+                </p>
+                <p>
+                  Esto significa que el acta y los documentos generados mostrarán
+                  su nombre como inspector ejecutor.
+                </p>
+                <p className="font-medium">
+                  ¿Cuentas con la autorización expresa de {pendingNombre} para usar su nombre en esta visita?
+                </p>
+              </div>
+
+              {/* Acciones */}
+              <div className="flex gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={cancelInspectorChange}
+                  className="flex-1 px-4 py-2.5 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmInspectorChange}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-amber-500 text-white text-sm font-semibold hover:bg-amber-600 transition-colors"
+                >
+                  Sí, tengo autorización
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </form>
   )
 }

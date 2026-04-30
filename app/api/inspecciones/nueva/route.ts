@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { expediente_id, fecha_hora, duracion_min, direccion, testigo_id, notas } = body
+  const { expediente_id, fecha_hora, duracion_min, direccion, testigo_id, notas, inspector_ejecutor_id } = body
 
   if (!fecha_hora) {
     return NextResponse.json({ error: 'La fecha y hora son obligatorias.' }, { status: 400 })
@@ -35,11 +35,27 @@ export async function POST(req: NextRequest) {
     if (exp?.inspector_id) resolvedInspectorId = exp.inspector_id
   }
 
+  // Si se especifica un inspector ejecutor diferente, verificar que existe y es inspector activo
+  let resolvedEjecutorId: string | null = null
+  if (inspector_ejecutor_id && inspector_ejecutor_id !== resolvedInspectorId) {
+    const { data: ejecutor } = await supabase
+      .from('usuarios')
+      .select('id, rol')
+      .eq('id', inspector_ejecutor_id)
+      .in('rol', ['inspector', 'inspector_responsable'])
+      .maybeSingle()
+    if (!ejecutor) {
+      return NextResponse.json({ error: 'El inspector ejecutor no es válido.' }, { status: 400 })
+    }
+    resolvedEjecutorId = ejecutor.id
+  }
+
   const { data, error } = await supabase
     .from('inspecciones_agenda')
     .insert({
       expediente_id,
       inspector_id: resolvedInspectorId,
+      inspector_ejecutor_id: resolvedEjecutorId,
       fecha_hora,
       duracion_min: duracion_min ?? 120,
       direccion,

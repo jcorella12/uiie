@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { renderToBuffer } from '@react-pdf/renderer'
-import { CotizacionExternaDoc } from '@/lib/pdf/CotizacionExternaDoc'
-import { createElement } from 'react'
+import { generarCotizacionDocx } from '@/lib/docx/CotizacionDocx'
 import path from 'path'
 import fs from 'fs'
 
@@ -73,12 +71,13 @@ export async function GET(req: NextRequest) {
     logoSrc: getLogoPath(),
   }
 
-  const buffer = await renderToBuffer(createElement(CotizacionExternaDoc, { datos }) as any)
+  const buffer = await generarCotizacionDocx(datos)
 
-  return new NextResponse(new Uint8Array(buffer), {
+  return new NextResponse(buffer as any, {
     headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="Cotizacion-${folio}.pdf"`,
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'Content-Disposition': `attachment; filename="Cotizacion-${folio}.docx"`,
+      'Cache-Control': 'no-store',
     },
   })
 }

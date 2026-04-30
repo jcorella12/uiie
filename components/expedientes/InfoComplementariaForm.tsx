@@ -152,7 +152,7 @@ function PersonaEditor({
       onChange({
         nombre:     nombreCompleto,
         curp:       p.curp ?? '',
-        numero_ine: p.clave_elector ?? p.numero_ine ?? '',
+        numero_ine: p.numero_ine ?? '',
       })
 
       // Archive full INE data to testigos catalog (best-effort)
@@ -291,8 +291,8 @@ function PersonaEditor({
               <input type="text" value={values.curp} onChange={e => onChange({ curp: e.target.value })} className={inputCls} placeholder="18 caracteres" maxLength={18} />
             </Field>
           )}
-          <Field label="Número de INE / Clave de elector">
-            <input type="text" value={values.numero_ine} onChange={e => onChange({ numero_ine: e.target.value })} className={inputCls} placeholder="Clave de elector" />
+          <Field label="Número de INE (MRZ reverso)">
+            <input type="text" value={values.numero_ine} onChange={e => onChange({ numero_ine: e.target.value })} className={inputCls} placeholder="12 dígitos del reverso" />
           </Field>
           <Field label="Teléfono">
             <input type="text" value={values.telefono} onChange={e => onChange({ telefono: e.target.value })} className={inputCls} placeholder="10 dígitos" />

@@ -104,6 +104,8 @@ export async function POST(req: NextRequest) {
       nombre,
       tipo,
       storage_path: storagePath,
+      mime_type:    file.type || null,
+      tamano_bytes: file.size || null,
       subido_por_cliente: true,
     })
     .select('id, nombre, tipo, storage_path')

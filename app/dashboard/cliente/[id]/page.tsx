@@ -109,6 +109,7 @@ export default async function ProyectoDetalleCliente({
       tiene_i1_i2, tiene_interruptor_exclusivo, tiene_ccfp, tiene_proteccion_respaldo,
       folio_id, cliente_id,
       cli_marca_paneles, cli_modelo_paneles, cli_num_paneles, cli_potencia_panel_wp,
+      cli_inversor_id,
       cli_marca_inversor, cli_modelo_inversor, cli_capacidad_kw, cli_num_inversores,
       cli_num_medidor, cli_direccion, cli_notas, cli_completado_at,
       folio:folios_lista_control(numero_folio),
@@ -152,7 +153,7 @@ export default async function ProyectoDetalleCliente({
   const clienteId = (expediente as any).cliente_id ?? null
 
   // Participantes previos: testigos vinculados a expedientes de este cliente
-  const participantesPrevios = clienteId ? await supabase
+  const testigos = clienteId ? await supabase
     .from('expediente_testigos')
     .select('testigo:testigos(id, nombre, apellidos, curp, clave_elector, numero_ine, telefono, email)')
     .in('expediente_id',
@@ -160,6 +161,44 @@ export default async function ProyectoDetalleCliente({
     )
     .then(r => (r.data ?? []).map((row: any) => row.testigo).filter(Boolean))
     : []
+
+  // También incluir firmante y atiende guardados en el registro del cliente
+  const clienteData = (expediente as any).cliente as any
+  const extrasCliente: any[] = []
+  if (clienteData?.firmante_nombre) {
+    extrasCliente.push({
+      id:         `firmante-${clienteData.id}`,
+      nombre:     clienteData.firmante_nombre,
+      apellidos:  null,
+      curp:       clienteData.firmante_curp ?? null,
+      numero_ine: clienteData.firmante_numero_ine ?? null,
+      clave_elector: null,
+      telefono:   clienteData.firmante_telefono ?? null,
+      email:      clienteData.firmante_correo ?? null,
+    })
+  }
+  if (clienteData?.atiende_nombre) {
+    extrasCliente.push({
+      id:         `atiende-${clienteData.id}`,
+      nombre:     clienteData.atiende_nombre,
+      apellidos:  null,
+      curp:       null,
+      numero_ine: clienteData.atiende_numero_ine ?? null,
+      clave_elector: null,
+      telefono:   clienteData.atiende_telefono ?? null,
+      email:      clienteData.atiende_correo ?? null,
+    })
+  }
+  // Merge: testigos primero, extras del cliente solo si no son duplicados por nombre
+  const participantesPrevios = [
+    ...testigos,
+    ...extrasCliente.filter(e =>
+      !(testigos as any[]).some((t: any) =>
+        t.nombre?.toLowerCase() === e.nombre?.toLowerCase() &&
+        (t.numero_ine === e.numero_ine || (!t.numero_ine && !e.numero_ine))
+      )
+    ),
+  ]
 
   const [
     { data: inspecciones },

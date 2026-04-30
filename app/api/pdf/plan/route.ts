@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { renderToBuffer } from '@react-pdf/renderer'
-import { PlanInspeccionDoc } from '@/lib/pdf/PlanInspeccionDoc'
-import type { PlanData } from '@/lib/pdf/PlanInspeccionDoc'
-import { createElement } from 'react'
+import { generarPlanDocx } from '@/lib/docx/PlanInspeccionDocx'
+import type { PlanData } from '@/lib/docx/PlanInspeccionDocx'
 import path from 'path'
 import fs from 'fs'
 
@@ -101,12 +99,12 @@ export async function GET(req: NextRequest) {
     modelo_inversor: inv?.modelo ?? undefined,
   }
 
-  const buffer = await renderToBuffer(createElement(PlanInspeccionDoc, { datos }) as any)
+  const buffer = await generarPlanDocx(datos)
 
   return new NextResponse(buffer as any, {
     headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="Plan-Inspeccion-${folio}.pdf"`,
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'Content-Disposition': `attachment; filename="Plan-Inspeccion-${folio}.docx"`,
       'Cache-Control': 'no-store',
     },
   })

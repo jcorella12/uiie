@@ -23,7 +23,14 @@ export default async function NuevaInspeccionPage({
 
   const isResponsable = usuario?.rol === 'inspector_responsable'
 
-  const [{ data: expedientes }, { data: testigos }, { data: inspeccionesRaw }] = await Promise.all([
+  // Fetch current user profile for the form default
+  const { data: usuarioPerfil } = await supabase
+    .from('usuarios')
+    .select('id, nombre, apellidos')
+    .eq('id', user.id)
+    .single()
+
+  const [{ data: expedientes }, { data: testigos }, { data: inspeccionesRaw }, { data: inspectores }] = await Promise.all([
     isResponsable
       // Inspector responsable puede programar para cualquier expediente activo
       ? supabase
@@ -56,6 +63,12 @@ export default async function NuevaInspeccionPage({
           .eq('inspector_id', user.id)
           .in('status', ['programada', 'en_curso', 'realizada'])
           .order('fecha_hora'),
+    // Lista de todos los inspectores activos para la delegación
+    supabase
+      .from('usuarios')
+      .select('id, nombre, apellidos')
+      .in('rol', ['inspector', 'inspector_responsable'])
+      .order('nombre'),
   ])
 
   const inspeccionesExistentes = (inspeccionesRaw ?? []).map((i: any) => ({
@@ -77,6 +90,13 @@ export default async function NuevaInspeccionPage({
       <NuevaInspeccionForm
         expedientes={(expedientes ?? []) as any[]}
         testigos={(testigos ?? []) as any[]}
+        inspectores={(inspectores ?? []) as any[]}
+        currentUserId={user.id}
+        currentUserNombre={
+          usuarioPerfil
+            ? `${usuarioPerfil.nombre} ${usuarioPerfil.apellidos ?? ''}`.trim()
+            : ''
+        }
         defaultExpedienteId={searchParams.expediente_id}
         showInspector={isResponsable}
         inspeccionesExistentes={inspeccionesExistentes}

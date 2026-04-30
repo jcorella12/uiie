@@ -45,6 +45,8 @@ interface ExpedienteInfoFields {
   tipo_central?: string
   // Medidor
   numero_medidor?: string
+  numero_serie_medidor?: string
+  numero_cfe_medidor?: string
   // Subestación
   capacidad_subestacion_kva?: number | null
   // Protecciones
@@ -158,6 +160,8 @@ export default function InfoTecnicaForm({ expediente, cliente, inversores, readO
     tipo_conexion:         e.tipo_conexion         ?? 'generacion_distribuida',
     tipo_central:          e.tipo_central          ?? 'MT',
     numero_medidor:        e.numero_medidor        ?? '',
+    numero_serie_medidor:  e.numero_serie_medidor  ?? '',
+    numero_cfe_medidor:    e.numero_cfe_medidor    ?? '',
     // Subestación
     capacidad_subestacion_kva: String(e.capacidad_subestacion_kva ?? ''),
     // Protecciones
@@ -321,7 +325,9 @@ export default function InfoTecnicaForm({ expediente, cliente, inversores, readO
             <Row label="Núm. inversores"       value={expediente.num_inversores} />
             <Row label="Tipo de conexión"      value={tipoConexionLabel} />
             <Row label="Tipo de central"       value={tipoCentralLabel} />
-            <Row label="Número de medidor CFE" value={expediente.numero_medidor} />
+            <Row label="Número de medidor CFE"      value={expediente.numero_medidor} />
+            <Row label="Número de serie medidor"    value={expediente.numero_serie_medidor} />
+            <Row label="Código C.F.E. (6 dígitos)"  value={expediente.numero_cfe_medidor} />
           </div>
 
           {/* Subestación */}
@@ -465,6 +471,12 @@ export default function InfoTecnicaForm({ expediente, cliente, inversores, readO
             </Field>
             <Field label="Número de medidor CFE">
               <input type="text" value={form.numero_medidor} onChange={set('numero_medidor')} className={inputCls} placeholder="12345678" />
+            </Field>
+            <Field label="Número de serie (medidor)">
+              <input type="text" value={form.numero_serie_medidor} onChange={set('numero_serie_medidor')} className={inputCls} placeholder="Núm. serie físico del medidor" />
+            </Field>
+            <Field label="Código C.F.E. (6 dígitos)">
+              <input type="text" value={form.numero_cfe_medidor} onChange={set('numero_cfe_medidor')} className={inputCls} placeholder="ej. A3B2C1" maxLength={10} />
             </Field>
           </FormGroup>
 

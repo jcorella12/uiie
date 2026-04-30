@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { renderToBuffer } from '@react-pdf/renderer'
-import { ContratoDoc } from '@/lib/pdf/ContratoDoc'
-import type { ContratoData } from '@/lib/pdf/ContratoDoc'
-import { createElement } from 'react'
+import { generarContratoDocx } from '@/lib/docx/ContratoDocx'
+import type { ContratoData } from '@/lib/docx/ContratoDocx'
 import path from 'path'
 import fs from 'fs'
 
@@ -125,12 +123,12 @@ export async function GET(req: NextRequest) {
     precio_sin_iva: precio,
   }
 
-  const buffer = await renderToBuffer(createElement(ContratoDoc, { datos }) as any)
+  const buffer = await generarContratoDocx(datos)
 
   return new NextResponse(buffer as any, {
     headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="Contrato-${folio}.pdf"`,
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'Content-Disposition': `attachment; filename="Contrato-${folio}.docx"`,
       'Cache-Control': 'no-store',
     },
   })

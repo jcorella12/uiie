@@ -261,8 +261,19 @@ Responde ÚNICAMENTE con el JSON válido, sin texto adicional.`
 
   let analysis: any = null
   try {
-    const isPdf  = doc.mime_type === 'application/pdf'
-    const isImage = doc.mime_type?.startsWith('image/')
+    // Infer mime_type from storage_path extension as fallback for documents
+    // uploaded via the client portal before mime_type was saved (legacy records).
+    const ext = doc.storage_path?.split('.').pop()?.toLowerCase() ?? ''
+    const EXT_MIME: Record<string, string> = {
+      pdf: 'application/pdf',
+      jpg: 'image/jpeg', jpeg: 'image/jpeg',
+      png: 'image/png', gif: 'image/gif',
+      webp: 'image/webp', heic: 'image/heic', heif: 'image/heif',
+    }
+    const effectiveMime = doc.mime_type || EXT_MIME[ext] || null
+
+    const isPdf   = effectiveMime === 'application/pdf'
+    const isImage = !!effectiveMime?.startsWith('image/')
 
     let message
     if (isPdf || isImage) {
@@ -274,7 +285,7 @@ Responde ÚNICAMENTE con el JSON válido, sin texto adicional.`
           content: [
             {
               type: isPdf ? 'document' : 'image',
-              source: { type: 'base64', media_type: doc.mime_type as any, data: base64 },
+              source: { type: 'base64', media_type: effectiveMime as any, data: base64 },
             } as any,
             { type: 'text', text: prompt },
           ],

@@ -148,7 +148,7 @@ export default async function ExpedienteDetailPage({
       .order('created_at', { ascending: false }),
     db
       .from('inspecciones_agenda')
-      .select('*, testigo:testigos(nombre, apellidos)')
+      .select('*, testigo:testigos(nombre, apellidos), inspector_ejecutor:usuarios!inspector_ejecutor_id(nombre, apellidos)')
       .eq('expediente_id', params.id)
       .order('fecha_hora', { ascending: true }),
     db
@@ -189,6 +189,12 @@ export default async function ExpedienteDetailPage({
 
   const folioNumero: string =
     folio?.numero_folio ?? expediente.numero_folio ?? '—'
+
+  // Inspector ejecutor de la próxima/última inspección (delegación)
+  const ultimaInspeccion = (inspecciones ?? []).slice().reverse().find((i: any) =>
+    ['programada', 'en_curso', 'realizada'].includes(i.status)
+  ) as any | undefined
+  const ejecutorActivo = ultimaInspeccion?.inspector_ejecutor as { nombre: string; apellidos?: string } | null
 
   const statusBadgeClass =
     EXPEDIENTE_STATUS_BADGE[expediente.status] ??
@@ -259,6 +265,17 @@ export default async function ExpedienteDetailPage({
                 <span className="text-xs text-gray-400 font-medium">Inicio</span>
                 <span className="font-semibold text-gray-800">
                   {formatDateShort(expediente.fecha_inicio)}
+                </span>
+              </div>
+            )}
+            {ejecutorActivo && (
+              <div className="flex flex-col items-end sm:items-start">
+                <span className="text-xs text-gray-400 font-medium">Inspector visita</span>
+                <span className="font-semibold text-amber-700 flex items-center gap-1.5">
+                  {`${ejecutorActivo.nombre} ${ejecutorActivo.apellidos ?? ''}`.trim()}
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-600 leading-none">
+                    delegado
+                  </span>
                 </span>
               </div>
             )}
@@ -418,12 +435,14 @@ export default async function ExpedienteDetailPage({
                   <th className="text-left py-2.5 px-2 font-medium text-gray-500">Fecha y hora</th>
                   <th className="text-left py-2.5 px-2 font-medium text-gray-500">Dirección</th>
                   <th className="text-center py-2.5 px-2 font-medium text-gray-500">Estado</th>
+                  <th className="text-left py-2.5 px-2 font-medium text-gray-500">Inspector</th>
                   <th className="text-left py-2.5 px-2 font-medium text-gray-500">Testigo</th>
                 </tr>
               </thead>
               <tbody>
                 {inspecciones.map((insp: any) => {
                   const testigo = insp.testigo as any
+                  const ejecutor = insp.inspector_ejecutor as { nombre: string; apellidos?: string } | null
                   const badgeClass =
                     INSPECCION_STATUS_BADGE[insp.status] ??
                     'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600'
@@ -448,6 +467,18 @@ export default async function ExpedienteDetailPage({
                       </td>
                       <td className="py-2.5 px-2 text-center">
                         <span className={badgeClass}>{statusLabel}</span>
+                      </td>
+                      <td className="py-2.5 px-2 text-gray-600">
+                        {ejecutor ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span>{`${ejecutor.nombre} ${ejecutor.apellidos ?? ''}`.trim()}</span>
+                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 leading-none">
+                              delegado
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">—</span>
+                        )}
                       </td>
                       <td className="py-2.5 px-2 text-gray-600">
                         {testigo

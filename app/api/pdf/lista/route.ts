@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { renderToBuffer } from '@react-pdf/renderer'
-import { ListaInspeccionDoc } from '@/lib/pdf/ListaInspeccionDoc'
-import type { ListaData } from '@/lib/pdf/ListaInspeccionDoc'
-import { createElement } from 'react'
+import { generarListaDocx } from '@/lib/docx/ListaInspeccionDocx'
+import type { ListaData } from '@/lib/docx/ListaInspeccionDocx'
 import path from 'path'
 import fs from 'fs'
 
@@ -43,15 +41,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Expediente no encontrado' }, { status: 404 })
   }
 
-  // ── Inspección realizada más reciente ─────────────────────────────────────
-  const { data: inspeccion } = await supabase
+  // ── Inspección: preferir 'realizada', luego 'en_curso', luego 'programada' ──
+  const { data: inspeccionesRaw } = await supabase
     .from('inspecciones_agenda')
-    .select('fecha_hora, direccion')
+    .select('fecha_hora, direccion, status, inspector_ejecutor:usuarios!inspector_ejecutor_id(nombre, apellidos)')
     .eq('expediente_id', id)
-    .eq('status', 'realizada')
+    .in('status', ['programada', 'en_curso', 'realizada'])
     .order('fecha_hora', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+    .limit(5)
+
+  const STATUS_PRIO: Record<string, number> = { realizada: 0, en_curso: 1, programada: 2 }
+  const inspeccion = (inspeccionesRaw ?? [])
+    .slice()
+    .sort((a: any, b: any) => (STATUS_PRIO[a.status] ?? 9) - (STATUS_PRIO[b.status] ?? 9))[0] ?? null
 
   // ── Mapeos ────────────────────────────────────────────────────────────────
   const cliente    = exp.cliente as any
@@ -59,9 +61,9 @@ export async function GET(req: NextRequest) {
   const inspUser   = exp.inspector as any   // ahora es usuarios directamente
   const folio: string = (exp.folio as any)?.numero_folio ?? exp.numero_folio ?? id
 
-  const fecha = inspeccion
-    ? fmtFecha(inspeccion.fecha_hora)
-    : fmtFecha(new Date().toISOString())
+  const fechaBase = inspeccion?.fecha_hora ?? new Date().toISOString()
+  const horaStr = new Date(fechaBase).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
+  const fecha = `${fmtFecha(fechaBase)}, ${horaStr} hrs`
 
   const datos: ListaData = {
     logoSrc: getLogoPath(),
@@ -80,10 +82,12 @@ export async function GET(req: NextRequest) {
     ciudad:        exp.ciudad ?? '—',
     estado:        exp.estado_mx ?? '—',
 
-    // Inspector
-    inspector_nombre: inspUser
-      ? `${inspUser.nombre} ${inspUser.apellidos ?? ''}`.trim()
-      : 'Inspector UIIE',
+    // Inspector — usar ejecutor si fue delegada la visita
+    inspector_nombre: (() => {
+      const ejecutor = (inspeccion as any)?.inspector_ejecutor as { nombre: string; apellidos?: string } | null
+      if (ejecutor) return `${ejecutor.nombre} ${ejecutor.apellidos ?? ''}`.trim()
+      return inspUser ? `${inspUser.nombre} ${inspUser.apellidos ?? ''}`.trim() : 'Inspector UIIE'
+    })(),
 
     // Checks
     tipo_central:   exp.tipo_central ?? 'MT',
@@ -105,12 +109,12 @@ export async function GET(req: NextRequest) {
     resultado: exp.resultado_inspeccion ?? 'aprobado',
   }
 
-  const buffer = await renderToBuffer(createElement(ListaInspeccionDoc, { datos }) as any)
+  const buffer = await generarListaDocx(datos)
 
   return new NextResponse(buffer as any, {
     headers: {
-      'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename="Lista-DACG-${folio}.pdf"`,
+      'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'Content-Disposition': `attachment; filename="Lista-DACG-${folio}.docx"`,
       'Cache-Control': 'no-store',
     },
   })

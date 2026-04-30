@@ -46,32 +46,32 @@ const BOTONES: BotonesConfig[] = [
   {
     key: 'cotizacion',
     label: 'Cotización',
-    filename: (f) => `Cotizacion-${f}.pdf`,
+    filename: (f) => `Cotizacion-${f}.docx`,
     icon: ReceiptText,
   },
   {
     key: 'contrato',
     label: 'Contrato',
-    filename: (f) => `Contrato-${f}.pdf`,
+    filename: (f) => `Contrato-${f}.docx`,
     icon: ScrollText,
   },
   {
     key: 'plan',
     label: 'Plan de Inspección',
-    filename: (f) => `Plan-${f}.pdf`,
+    filename: (f) => `Plan-${f}.docx`,
     icon: ClipboardList,
   },
   {
     key: 'acta',
     label: 'Acta FO-12',
-    filename: (f) => `Acta-${f}.pdf`,
+    filename: (f) => `Acta-${f}.docx`,
     icon: FileCheck2,
     visible: (status) => status !== 'borrador',
   },
   {
     key: 'lista',
     label: 'Lista DACG',
-    filename: (f) => `Lista-DACG-${f}.pdf`,
+    filename: (f) => `Lista-DACG-${f}.docx`,
     icon: FileText,
     visible: (status) => status !== 'borrador',
   },
@@ -111,7 +111,7 @@ export function BotonesPDF({ expedienteId, folio, status, checklistPct = 0, isAu
       const res = await fetch(`/api/pdf/${key}?expediente_id=${expedienteId}`)
 
       if (!res.ok) {
-        let mensaje = 'Error generando el PDF'
+        let mensaje = 'Error generando el documento'
         let faltantes: string[] = []
         try {
           const body = await res.json()
@@ -229,7 +229,7 @@ export function BotonesPDF({ expedienteId, folio, status, checklistPct = 0, isAu
       {/* Nota de pie */}
       <div className="px-5 py-3 bg-gray-50 border-t border-gray-100">
         <p className="text-xs text-gray-400 text-center">
-          Los PDFs se generan en tiempo real con datos actualizados.
+          Los documentos se generan en tiempo real · Acta, Contrato y más en formato Word (.docx)
         </p>
       </div>
     </div>

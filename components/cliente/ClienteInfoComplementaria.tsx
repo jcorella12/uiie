@@ -94,7 +94,7 @@ function PersonaEditor({
     onChange({
       nombre:     `${p.nombre}${p.apellidos ? ' ' + p.apellidos : ''}`,
       curp:       p.curp ?? '',
-      numero_ine: p.clave_elector ?? p.numero_ine ?? '',
+      numero_ine: p.numero_ine ?? p.clave_elector ?? '',
       telefono:   p.telefono ?? '',
       correo:     p.email ?? '',
     })
@@ -118,7 +118,7 @@ function PersonaEditor({
       onChange({
         nombre:     nombreCompleto,
         curp:       p.curp ?? '',
-        numero_ine: p.clave_elector ?? p.numero_ine ?? '',
+        numero_ine: p.numero_ine ?? p.clave_elector ?? '',
       })
 
       // Archive to testigos catalog (best-effort)
@@ -193,7 +193,7 @@ function PersonaEditor({
             {participantesPrevios.map(p => (
               <option key={p.id} value={p.id}>
                 {p.nombre}{p.apellidos ? ' ' + p.apellidos : ''}
-                {p.clave_elector ? ` — ${p.clave_elector}` : p.numero_ine ? ` — ${p.numero_ine}` : ''}
+                {p.numero_ine ? ` — ${p.numero_ine}` : p.clave_elector ? ` — ${p.clave_elector}` : ''}
               </option>
             ))}
           </select>
