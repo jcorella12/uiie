@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
   // Cargar expediente con datos del cliente
   const { data: exp } = await db
     .from('expedientes')
-    .select('*, cliente:clientes(nombre), inversor:inversores(marca, modelo, potencia_kw)')
+    .select('*, cliente:clientes(nombre), inversor:inversores!expedientes_inversor_id_fkey(marca, modelo, potencia_kw)')
     .eq('id', expediente_id)
     .single()
 

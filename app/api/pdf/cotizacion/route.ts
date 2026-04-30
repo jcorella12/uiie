@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   const { data: exp } = await supabase
     .from('expedientes')
     .select(
-      `*, cliente:clientes(*), folio:folios_lista_control(numero_folio), inversor:inversores(marca,modelo), inspector:usuarios!inspector_id(nombre,apellidos)`,
+      `*, cliente:clientes(*), folio:folios_lista_control(numero_folio), inversor:inversores!expedientes_inversor_id_fkey(marca,modelo), inspector:usuarios!inspector_id(nombre,apellidos)`,
     )
     .eq('id', expedienteId)
     .single()

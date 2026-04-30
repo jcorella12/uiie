@@ -124,7 +124,7 @@ export default async function ExpedienteDetailPage({
       *,
       cliente:clientes(*),
       folio:folios_lista_control(numero_folio),
-      inversor:inversores(marca, modelo, potencia_kw, fase)
+      inversor:inversores!expedientes_inversor_id_fkey(marca, modelo, potencia_kw, fase)
     `)
     .eq('id', params.id)
     .single()

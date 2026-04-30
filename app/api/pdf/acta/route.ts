@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       *,
       cliente:clientes(*),
       folio:folios_lista_control(numero_folio),
-      inversor:inversores(marca, modelo, certificacion, justificacion_ieee1547),
+      inversor:inversores!expedientes_inversor_id_fkey(marca, modelo, certificacion, justificacion_ieee1547),
       inspector:usuarios!inspector_id(
         nombre, apellidos,
         perfil:inspectores!usuario_id(numero_cedula, firma_url, sello_url)

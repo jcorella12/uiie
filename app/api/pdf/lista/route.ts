@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       *,
       cliente:clientes(nombre, representante, atiende_nombre),
       folio:folios_lista_control(numero_folio),
-      inversor:inversores(marca, modelo, certificacion),
+      inversor:inversores!expedientes_inversor_id_fkey(marca, modelo, certificacion),
       inspector:usuarios!inspector_id(nombre, apellidos)
     `)
     .eq('id', id)
