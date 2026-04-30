@@ -1,5 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  env: {
+    // Baked in at build time so the sidebar can show "built on …"
+    NEXT_PUBLIC_BUILD_TIME: new Date().toISOString(),
+  },
   eslint: {
     // Lint errors exist in legacy files; don't block production builds
     ignoreDuringBuilds: true,
