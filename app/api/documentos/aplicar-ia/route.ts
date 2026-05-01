@@ -96,8 +96,30 @@ export async function POST(req: NextRequest) {
     if (ai.tipo_central     != null) update.tipo_central     = ai.tipo_central
     if (ai.numero_medidor   != null) update.numero_medidor   = ai.numero_medidor
 
-    // Subestación
-    if (ai.capacidad_subestacion_kva != null) update.capacidad_subestacion_kva = ai.capacidad_subestacion_kva
+    // Subestación — solo aceptar tamaños estándar de transformador (NOM)
+    // Si la IA detecta un valor cercano a uno estándar, lo redondea al más cercano.
+    if (ai.capacidad_subestacion_kva != null) {
+      const TAMANOS_ESTANDAR_KVA = [
+        5, 10, 15, 25, 30, 37.5, 45, 50, 75, 100, 112.5, 150,
+        167, 200, 225, 250, 300, 333, 400, 500, 750, 1000,
+        1250, 1500, 2000, 2500, 3000, 3750, 5000,
+      ]
+      const valor = Number(ai.capacidad_subestacion_kva)
+      // Encontrar el estándar más cercano dentro del 10% de tolerancia
+      let mejor: number | null = null
+      let menorDiff = Infinity
+      for (const std of TAMANOS_ESTANDAR_KVA) {
+        const diff = Math.abs(std - valor)
+        if (diff < menorDiff && diff / std <= 0.10) {  // 10% de tolerancia
+          menorDiff = diff
+          mejor = std
+        }
+      }
+      if (mejor != null) {
+        update.capacidad_subestacion_kva = mejor
+      }
+      // Si no encontramos estándar cercano, NO actualizamos — mejor que el usuario lo seleccione
+    }
     // Protecciones (solo si el AI detectó el elemento; no sobreescribir con false si ya estaba en true)
     if (ai.tiene_i1_i2               === true) update.tiene_i1_i2               = true
     if (ai.tiene_interruptor_exclusivo === true) update.tiene_interruptor_exclusivo = true

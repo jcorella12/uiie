@@ -2,7 +2,11 @@
 
 import { useState, useEffect, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Pencil, X, Save, Loader2 } from 'lucide-react'
+import {
+  Pencil, X, Save, Loader2, User, MapPin, Zap, Building2,
+  Shield, FileText, FileCheck, MessageSquare,
+} from 'lucide-react'
+import CollapsibleSection from '@/components/ui/CollapsibleSection'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -295,99 +299,142 @@ export default function InfoTecnicaForm({ expediente, cliente, inversores, readO
         </div>
       )}
 
-      {/* ── Modo lectura ── */}
+      {/* ── Modo lectura — secciones colapsables ── */}
       {!editing && (
-        <div className="space-y-0">
+        <div className="space-y-2">
           {/* Cliente final */}
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 mt-1">Cliente final</p>
-          <div className="divide-y divide-gray-50 mb-4">
-            <Row label="Nombre / Razón social" value={expediente.nombre_cliente_final} />
-          </div>
+          <CollapsibleSection
+            title="Cliente final"
+            icon={User}
+            complete={!!expediente.nombre_cliente_final}
+            summary={expediente.nombre_cliente_final ?? 'Sin capturar'}
+            defaultOpen
+          >
+            <div className="divide-y divide-gray-50">
+              <Row label="Nombre / Razón social" value={expediente.nombre_cliente_final} />
+            </div>
+          </CollapsibleSection>
 
           {/* Dirección */}
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1 mt-1">Dirección del proyecto</p>
-          <div className="divide-y divide-gray-50 mb-4">
-            <Row label="Calle y número"   value={expediente.direccion_proyecto} />
-            <Row label="Colonia"          value={expediente.colonia} />
-            <Row label="Municipio"        value={expediente.municipio} />
-            <Row label="Ciudad"           value={expediente.ciudad} />
-            <Row label="Código Postal"    value={expediente.codigo_postal} />
-            <Row label="Estado"           value={expediente.estado_mx} />
-          </div>
+          <CollapsibleSection
+            title="Dirección del proyecto"
+            icon={MapPin}
+            complete={!!expediente.direccion_proyecto && !!expediente.ciudad}
+            summary={[expediente.direccion_proyecto, expediente.ciudad, expediente.estado_mx].filter(Boolean).join(', ') || 'Sin capturar'}
+          >
+            <div className="divide-y divide-gray-50">
+              <Row label="Calle y número"   value={expediente.direccion_proyecto} />
+              <Row label="Colonia"          value={expediente.colonia} />
+              <Row label="Municipio"        value={expediente.municipio} />
+              <Row label="Ciudad"           value={expediente.ciudad} />
+              <Row label="Código Postal"    value={expediente.codigo_postal} />
+              <Row label="Estado"           value={expediente.estado_mx} />
+            </div>
+          </CollapsibleSection>
 
           {/* Instalación */}
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Instalación</p>
-          <div className="divide-y divide-gray-50 mb-4">
-            <Row label="Potencia (kWp)"       value={expediente.kwp} />
-            <Row label="Núm. paneles"          value={expediente.num_paneles} />
-            <Row label="Potencia por panel (Wp)" value={expediente.potencia_panel_wp} />
-            <Row label="Inversor"             value={inversorActual ? `${inversorActual.marca} ${inversorActual.modelo} · ${inversorActual.potencia_kw} kW · ${inversorActual.fase}` : undefined} />
-            <Row label="Núm. inversores"       value={expediente.num_inversores} />
-            <Row label="Tipo de conexión"      value={tipoConexionLabel} />
-            <Row label="Tipo de central"       value={tipoCentralLabel} />
-            <Row label="Número de medidor CFE"      value={expediente.numero_medidor} />
-            <Row label="Número de serie medidor"    value={expediente.numero_serie_medidor} />
-            <Row label="Código C.F.E. (6 dígitos)"  value={expediente.numero_cfe_medidor} />
-          </div>
+          <CollapsibleSection
+            title="Instalación"
+            icon={Zap}
+            complete={!!(expediente.kwp && expediente.num_paneles && expediente.inversor_id)}
+            summary={expediente.kwp ? `${expediente.kwp} kWp · ${expediente.num_paneles ?? '?'} paneles` : 'Sin capturar'}
+          >
+            <div className="divide-y divide-gray-50">
+              <Row label="Potencia (kWp)"       value={expediente.kwp} />
+              <Row label="Núm. paneles"          value={expediente.num_paneles} />
+              <Row label="Potencia por panel (Wp)" value={expediente.potencia_panel_wp} />
+              <Row label="Inversor"             value={inversorActual ? `${inversorActual.marca} ${inversorActual.modelo} · ${inversorActual.potencia_kw} kW · ${inversorActual.fase}` : undefined} />
+              <Row label="Núm. inversores"       value={expediente.num_inversores} />
+              <Row label="Tipo de conexión"      value={tipoConexionLabel} />
+              <Row label="Tipo de central"       value={tipoCentralLabel} />
+              <Row label="Número de medidor CFE"      value={expediente.numero_medidor} />
+              <Row label="Número de serie medidor"    value={expediente.numero_serie_medidor} />
+              <Row label="Código C.F.E. (6 dígitos)"  value={expediente.numero_cfe_medidor} />
+            </div>
+          </CollapsibleSection>
 
           {/* Subestación */}
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Subestación eléctrica</p>
-          <div className="divide-y divide-gray-50 mb-4">
-            <Row label="Capacidad del transformador" value={expediente.capacidad_subestacion_kva != null ? `${expediente.capacidad_subestacion_kva} kVA` : undefined} />
-          </div>
+          <CollapsibleSection
+            title="Subestación eléctrica"
+            icon={Building2}
+            complete={expediente.capacidad_subestacion_kva != null}
+            summary={expediente.capacidad_subestacion_kva != null ? `${expediente.capacidad_subestacion_kva} kVA` : 'Sin capturar'}
+          >
+            <div className="divide-y divide-gray-50">
+              <Row label="Capacidad del transformador" value={expediente.capacidad_subestacion_kva != null ? `${expediente.capacidad_subestacion_kva} kVA` : undefined} />
+            </div>
+          </CollapsibleSection>
 
           {/* Protecciones */}
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Protecciones</p>
-          <div className="divide-y divide-gray-50 mb-4">
-            {([
+          {(() => {
+            const protecciones = [
               ['tiene_i1_i2',               'Interruptores I1/I2 instalados'],
               ['tiene_interruptor_exclusivo','Interruptor exclusivo de interconexión'],
               ['tiene_ccfp',               'CCFP / Centro de carga dedicado'],
               ['tiene_proteccion_respaldo', 'Protección de respaldo contra isla'],
-            ] as const).map(([field, label]) => (
-              <Row key={field} label={label} value={
-                expediente[field]
-                  ? <span className="inline-flex items-center gap-1 text-green-700 font-medium text-xs">✓ Sí</span>
-                  : <span className="text-gray-400 text-xs">No</span>
-              } />
-            ))}
-          </div>
+            ] as const
+            const cumplidas = protecciones.filter(([f]) => expediente[f]).length
+            return (
+              <CollapsibleSection
+                title="Protecciones"
+                icon={Shield}
+                complete={cumplidas === protecciones.length}
+                summary={`${cumplidas} de ${protecciones.length} cumplidas`}
+              >
+                <div className="divide-y divide-gray-50">
+                  {protecciones.map(([field, label]) => (
+                    <Row key={field} label={label} value={
+                      expediente[field]
+                        ? <span className="inline-flex items-center gap-1 text-green-700 font-medium text-xs">✓ Sí</span>
+                        : <span className="text-gray-400 text-xs">No</span>
+                    } />
+                  ))}
+                </div>
+              </CollapsibleSection>
+            )
+          })()}
 
           {/* Resolutivo */}
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Resolutivo CFE</p>
-          <div className="divide-y divide-gray-50 mb-4">
-            <Row label="Folio del resolutivo" value={expediente.resolutivo_folio} />
-            <Row label="Fecha del resolutivo" value={expediente.resolutivo_fecha
-              ? new Date(expediente.resolutivo_fecha + 'T12:00:00').toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })
-              : undefined}
-            />
-            <Row label="¿Tiene cobro?"        value={expediente.resolutivo_tiene_cobro ? 'Sí' : 'No'} />
-            {expediente.resolutivo_tiene_cobro && (
-              <>
-                <Row label="Monto"      value={expediente.resolutivo_monto != null ? `$${expediente.resolutivo_monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : undefined} />
-                <Row label="Referencia" value={expediente.resolutivo_referencia} />
-              </>
-            )}
-          </div>
+          <CollapsibleSection
+            title="Resolutivo CFE"
+            icon={FileText}
+            complete={!!(expediente.resolutivo_folio && expediente.resolutivo_fecha)}
+            summary={expediente.resolutivo_folio ?? 'Sin capturar'}
+          >
+            <div className="divide-y divide-gray-50">
+              <Row label="Folio del resolutivo" value={expediente.resolutivo_folio} />
+              <Row label="Fecha del resolutivo" value={expediente.resolutivo_fecha
+                ? new Date(expediente.resolutivo_fecha + 'T12:00:00').toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' })
+                : undefined}
+              />
+              <Row label="¿Tiene cobro?"        value={expediente.resolutivo_tiene_cobro ? 'Sí' : 'No'} />
+              {expediente.resolutivo_tiene_cobro && (
+                <>
+                  <Row label="Monto"      value={expediente.resolutivo_monto != null ? `$${expediente.resolutivo_monto.toLocaleString('es-MX', { minimumFractionDigits: 2 })}` : undefined} />
+                  <Row label="Referencia" value={expediente.resolutivo_referencia} />
+                </>
+              )}
+            </div>
+          </CollapsibleSection>
 
           {/* Dictamen UVIE */}
-          <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Dictamen UVIE</p>
-          <div className="divide-y divide-gray-50 mb-4">
-            <Row label="Folio / DVNP"     value={expediente.dictamen_folio_dvnp} />
-            <Row label="Nombre de la UVIE" value={expediente.dictamen_uvie_nombre} />
-          </div>
-
+          <CollapsibleSection
+            title="Dictamen UVIE"
+            icon={FileCheck}
+            complete={!!expediente.dictamen_folio_dvnp}
+            summary={expediente.dictamen_folio_dvnp ?? 'Sin capturar'}
+          >
+            <div className="divide-y divide-gray-50">
+              <Row label="Folio / DVNP"     value={expediente.dictamen_folio_dvnp} />
+              <Row label="Nombre de la UVIE" value={expediente.dictamen_uvie_nombre} />
+            </div>
+          </CollapsibleSection>
 
           {/* Observaciones */}
           {expediente.observaciones && (
-            <>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Observaciones</p>
-              <div className="divide-y divide-gray-50">
-                <div className="py-2">
-                  <span className="text-sm text-gray-800 whitespace-pre-wrap">{expediente.observaciones}</span>
-                </div>
-              </div>
-            </>
+            <CollapsibleSection title="Observaciones" icon={MessageSquare}>
+              <p className="text-sm text-gray-800 whitespace-pre-wrap py-2">{expediente.observaciones}</p>
+            </CollapsibleSection>
           )}
         </div>
       )}
@@ -483,7 +530,24 @@ export default function InfoTecnicaForm({ expediente, cliente, inversores, readO
           {/* Subestación */}
           <FormGroup title="Subestación eléctrica">
             <Field label="Capacidad del transformador (kVA)">
-              <input type="number" step="0.01" min="0" value={form.capacidad_subestacion_kva} onChange={set('capacidad_subestacion_kva')} className={inputCls} placeholder="150" />
+              <select
+                value={form.capacidad_subestacion_kva}
+                onChange={set('capacidad_subestacion_kva')}
+                className={inputCls}
+              >
+                <option value="">— Sin subestación —</option>
+                {[
+                  // Tamaños estándar de transformadores en México (NOM/CFE)
+                  5, 10, 15, 25, 30, 37.5, 45, 50, 75, 100, 112.5, 150,
+                  167, 200, 225, 250, 300, 333, 400, 500, 750, 1000,
+                  1250, 1500, 2000, 2500, 3000, 3750, 5000,
+                ].map(kva => (
+                  <option key={kva} value={kva}>{kva} kVA</option>
+                ))}
+              </select>
+              <p className="text-[11px] text-gray-400 mt-1">
+                Tamaños estándar según NOM. No se aceptan valores fuera de catálogo.
+              </p>
             </Field>
           </FormGroup>
 

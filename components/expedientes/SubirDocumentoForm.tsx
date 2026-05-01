@@ -13,6 +13,7 @@ const TIPO_LABELS: Record<DocumentoTipo, string> = {
   acta:               'Acta de Inspección (firmada)',
   lista_verificacion: 'Lista de Verificación (firmada)',
   resolutivo:         'Resolutivo CFE',
+  ficha_pago:         'Ficha de Pago (Resolutivo)',
   fotografia:         'Fotografía',
   certificado_cre:    'Certificado CNE',
   acuse_cre:          'Acuse CNE',
@@ -21,7 +22,7 @@ const TIPO_LABELS: Record<DocumentoTipo, string> = {
 }
 
 const TODOS_TIPOS: DocumentoTipo[] = [
-  'acta', 'lista_verificacion', 'resolutivo', 'dictamen',
+  'acta', 'lista_verificacion', 'resolutivo', 'ficha_pago', 'dictamen',
   'contrato', 'plano', 'memoria_tecnica', 'fotografia',
   'certificado_cre', 'acuse_cre', 'otro',
 ]

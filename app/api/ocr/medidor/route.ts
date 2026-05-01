@@ -1,6 +1,7 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { registrarCostoIA } from '@/lib/ai/cost'
 
 // ─── Prompt OCR Medidor / Resolutivo CFE ─────────────────────────────────────
 const MEDIDOR_PROMPT = `Eres un sistema OCR especializado en documentos CFE (Comisión Federal de Electricidad) de México.
@@ -64,6 +65,8 @@ export async function POST(req: NextRequest) {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
   let resultado: { numero_medidor: string | null; tipo?: string; confianza?: string } = { numero_medidor: null }
+  let costoUSD = 0
+  const MODELO = 'claude-opus-4-5'
 
   try {
     const contentBlock = isImage
@@ -71,7 +74,7 @@ export async function POST(req: NextRequest) {
       : { type: 'document' as const, source: { type: 'base64' as const, media_type: 'application/pdf' as const, data: base64 } }
 
     const message = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
+      model: MODELO,
       max_tokens: 256,
       messages: [{
         role: 'user',
@@ -82,6 +85,17 @@ export async function POST(req: NextRequest) {
     if (text.type === 'text') {
       resultado = JSON.parse(text.text.replace(/```json|```/g, '').trim())
     }
+
+    // Registrar costo
+    const dbAdmin = await createServiceClient()
+    costoUSD = await registrarCostoIA({
+      supabase:     dbAdmin,
+      usuarioId:    user.id,
+      expedienteId: expedienteId,
+      endpoint:     'ocr/medidor',
+      modelo:       MODELO,
+      usage:        message.usage,
+    })
   } catch {
     return NextResponse.json({ error: 'No se pudo leer el número de medidor.' }, { status: 422 })
   }
@@ -94,5 +108,5 @@ export async function POST(req: NextRequest) {
       .eq('id', expedienteId)
   }
 
-  return NextResponse.json(resultado)
+  return NextResponse.json({ ...resultado, costo_usd: costoUSD })
 }

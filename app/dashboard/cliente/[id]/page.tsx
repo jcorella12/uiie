@@ -56,7 +56,8 @@ const DICTAMEN_LABELS: Record<string, { label: string; color: string }> = {
 
 const DOCUMENTO_TIPO_LABELS: Record<string, string> = {
   contrato: 'Contrato', plano: 'Plano', memoria_tecnica: 'Memoria Técnica',
-  dictamen: 'Dictamen', acta: 'Acta', fotografia: 'Fotografía', otro: 'Otro',
+  dictamen: 'Dictamen', acta: 'Acta', resolutivo: 'Resolutivo CFE',
+  ficha_pago: 'Ficha de Pago', fotografia: 'Fotografía', otro: 'Otro',
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────

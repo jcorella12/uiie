@@ -8,12 +8,14 @@ import {
   formatCurrency, getPriceAlertLevel, UMBRAL_AUTORIZACION,
 } from '@/lib/pricing'
 import { TipoPersona } from '@/lib/types'
-import { AlertTriangle, CheckCircle, Info, Loader2, ArrowLeft, Plus } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Info, Loader2, ArrowLeft, Plus, UserCog } from 'lucide-react'
 import Link from 'next/link'
 
 interface Props {
   inspectorId: string
+  inspectorNombre?: string
   clientes: { id: string; nombre: string }[]
+  inspectores?: { id: string; nombre: string; apellidos?: string | null }[]
 }
 
 const ESTADOS_MX = [
@@ -24,9 +26,18 @@ const ESTADOS_MX = [
   'Veracruz','Yucatán','Zacatecas',
 ]
 
-export default function NuevaSolicitudForm({ inspectorId, clientes }: Props) {
+export default function NuevaSolicitudForm({
+  inspectorId, inspectorNombre = 'Yo', clientes, inspectores = [],
+}: Props) {
   const router = useRouter()
   const supabase = createClient()
+
+  // ── Inspector ejecutor (quien hará la visita física) ──
+  // Por defecto = el usuario actual; si delega, cambia
+  const [inspectorEjecutorId, setInspectorEjecutorId] = useState(inspectorId)
+  const esDelegado = inspectorEjecutorId !== inspectorId
+  const ejecutorSeleccionado = inspectores.find(i => i.id === inspectorEjecutorId)
+  const [confirmoDelegacion, setConfirmoDelegacion] = useState(false)
 
   // ── Cliente EPC (quien contrata a CIAE) ──
   const [clienteId, setClienteId] = useState('')
@@ -89,6 +100,13 @@ export default function NuevaSolicitudForm({ inspectorId, clientes }: Props) {
       return
     }
 
+    // Si está delegando a otro inspector, debe haber confirmado el aviso
+    if (esDelegado && !confirmoDelegacion) {
+      setError('Confirma que tienes autorización del inspector seleccionado para usar su folio.')
+      setLoading(false)
+      return
+    }
+
     const kWpNum = parseFloat(kwp)
     const precioNum = parseFloat(precioPropuesto.replace(/,/g, ''))
 
@@ -100,6 +118,8 @@ export default function NuevaSolicitudForm({ inspectorId, clientes }: Props) {
 
     const { error: insertError } = await supabase.from('solicitudes_folio').insert({
       inspector_id: inspectorId,
+      // Si es la misma persona, dejamos null. Si es otro, guardamos el ejecutor
+      inspector_ejecutor_id: esDelegado ? inspectorEjecutorId : null,
       // cliente_nombre ahora guarda el nombre del EPC (quien contrata a CIAE)
       cliente_nombre: clienteNombreEfectivo,
       tipo_persona: tipoPersona,
@@ -134,6 +154,86 @@ export default function NuevaSolicitudForm({ inspectorId, clientes }: Props) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
+
+      {/* ── SECCIÓN 0: Inspector ejecutor de la visita ── */}
+      {inspectores.length > 1 && (
+        <div className="card space-y-3">
+          <div className="border-b border-gray-100 pb-3 flex items-center gap-2">
+            <UserCog className="w-4 h-4 text-brand-green" />
+            <div>
+              <h2 className="font-semibold text-gray-800 text-base">Inspector que realizará la visita</h2>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Por default eres tú. Si otro inspector hará la visita física, selecciónalo aquí.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="label">Solicitante (tú)</label>
+              <input
+                type="text"
+                value={inspectorNombre}
+                disabled
+                className="input-field bg-gray-50 text-gray-500"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">Inspector que sube documentos y gestiona el expediente</p>
+            </div>
+            <div>
+              <label className="label">Ejecutor de la visita</label>
+              <select
+                className="input-field"
+                value={inspectorEjecutorId}
+                onChange={e => { setInspectorEjecutorId(e.target.value); setConfirmoDelegacion(false) }}
+              >
+                <option value={inspectorId}>{inspectorNombre} (yo)</option>
+                {inspectores
+                  .filter(i => i.id !== inspectorId)
+                  .map(i => (
+                    <option key={i.id} value={i.id}>
+                      {`${i.nombre} ${i.apellidos ?? ''}`.trim()}
+                    </option>
+                  ))
+                }
+              </select>
+              <p className="text-[11px] text-gray-400 mt-1">Quien hará la visita física al sitio</p>
+            </div>
+          </div>
+
+          {/* Alerta de delegación */}
+          {esDelegado && (
+            <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-3 space-y-2">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 text-sm">
+                  <p className="font-semibold text-amber-900">
+                    Estás solicitando un folio a nombre de otro inspector
+                  </p>
+                  <p className="text-amber-800 mt-0.5">
+                    El folio quedará registrado a nombre de{' '}
+                    <strong>{ejecutorSeleccionado ? `${ejecutorSeleccionado.nombre} ${ejecutorSeleccionado.apellidos ?? ''}`.trim() : '—'}</strong>{' '}
+                    como ejecutor. Asegúrate de tener su <strong>autorización y permiso</strong> para usar su folio.
+                    El expediente aparecerá en la lista de ambos.
+                  </p>
+                </div>
+              </div>
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={confirmoDelegacion}
+                  onChange={e => setConfirmoDelegacion(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-amber-600"
+                />
+                <span className="text-xs text-amber-900 font-medium">
+                  Confirmo que tengo autorización de{' '}
+                  {ejecutorSeleccionado ? ejecutorSeleccionado.nombre : 'este inspector'}{' '}
+                  para solicitar el folio en su nombre.
+                </span>
+              </label>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── SECCIÓN 1: Cliente / EPC ── */}
       <div className="card space-y-4">

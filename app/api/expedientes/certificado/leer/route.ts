@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { registrarCostoIA } from '@/lib/ai/cost'
 
 const AI_PROMPT = `Eres un extractor de datos de certificados de la CNE (Comisión Nacional de Energía) de México.
 Analiza este PDF de certificado de cumplimiento de interconexión y extrae los siguientes datos en JSON:
@@ -51,9 +52,10 @@ export async function POST(req: NextRequest) {
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+  const MODELO = 'claude-opus-4-5'
   try {
     const message = await anthropic.messages.create({
-      model:      'claude-opus-4-5',
+      model:      MODELO,
       max_tokens: 512,
       messages: [{
         role: 'user',
@@ -73,9 +75,9 @@ export async function POST(req: NextRequest) {
     // Buscar expediente por folio_interno
     let expediente_id:    string | null = null
     let expediente_folio: string | null = null
+    const svc = await createServiceClient()
 
     if (data.folio_interno) {
-      const svc = await createServiceClient()
       const { data: exp } = await svc
         .from('expedientes')
         .select('id, numero_folio')
@@ -88,7 +90,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ success: true, data, expediente_id, expediente_folio })
+    // Registrar costo (asociado al expediente si lo encontramos)
+    const costoUSD = await registrarCostoIA({
+      supabase:     svc,
+      usuarioId:    user.id,
+      expedienteId: expediente_id,
+      endpoint:     'expedientes/certificado/leer',
+      modelo:       MODELO,
+      usage:        message.usage,
+    })
+
+    return NextResponse.json({ success: true, data, expediente_id, expediente_folio, costo_usd: costoUSD })
   } catch (err: any) {
     console.error('[certificado/leer]', err)
     return NextResponse.json({ error: err.message ?? 'Error al analizar el PDF' }, { status: 500 })

@@ -334,7 +334,12 @@ export default function NuevaInspeccionForm({
       }
 
       setSuccess(true)
-      setTimeout(() => router.push('/dashboard/inspector/agenda'), 1500)
+      // Si vino desde un expediente (defaultExpedienteId presente), regresar a él.
+      // Si no, ir a la agenda como antes.
+      const destino = defaultExpedienteId
+        ? `/dashboard/inspector/expedientes/${defaultExpedienteId}`
+        : '/dashboard/inspector/agenda'
+      setTimeout(() => router.push(destino), 1500)
     } catch {
       setError('Error de conexión. Inténtalo de nuevo.')
       setLoading(false)

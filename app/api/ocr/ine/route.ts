@@ -1,9 +1,13 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { registrarCostoIA } from '@/lib/ai/cost'
 
 // ─── Prompt para imágenes (un solo lado) ──────────────────────────────────────
-const PROMPT_IMAGEN = `Eres un sistema OCR especializado en Credenciales para Votar (INE/IFE) mexicanas.
+const PROMPT_IMAGEN = `Eres un sistema OCR experto en Credenciales para Votar (INE/IFE) mexicanas.
+
+⚠️ ROTACIÓN: La imagen puede estar rotada 90°, 180° o 270°, o puede aparecer "de lado" (orientación horizontal cuando debería ser vertical, o viceversa). DEBES leer el texto en CUALQUIER orientación. Mentalmente rota la imagen lo necesario para leer correctamente. NO devuelvas null por estar rotada — siempre extrae los datos.
+
 Analiza esta imagen y extrae los datos en formato JSON exacto:
 
 {
@@ -25,18 +29,32 @@ NOTAS:
 - El código postal en la INE aparece junto a la colonia (ej: 'COL PITIC 83150').
 - El número INE está en el REVERSO en la primera línea del MRZ (3 líneas al fondo): patrón IDMEX...<< seguido del número.
 - Si el lado mostrado no tiene un campo, devuelve null.
+- IMPORTANTE: incluso si la imagen está rotada o de lado, EXTRAE LOS DATOS. La orientación visual es irrelevante.
 
 Responde ÚNICAMENTE con JSON válido, sin texto adicional ni markdown.`
 
 // ─── Prompt para PDFs (puede tener ambas caras) ───────────────────────────────
-const PROMPT_PDF = `Eres un sistema OCR especializado en Credenciales para Votar (INE/IFE) mexicanas.
-Este PDF puede contener una o dos imágenes de la credencial (frente y/o reverso).
-Analiza TODAS las páginas y extrae todos los datos disponibles.
+const PROMPT_PDF = `Eres un sistema OCR experto en Credenciales para Votar (INE/IFE) mexicanas.
 
-ESTRUCTURA:
-- FRENTE: NOMBRE, DOMICILIO (calle+número / colonia / CP / municipio / estado), CLAVE DE ELECTOR, CURP, VIGENCIA.
+⚠️ MULTIPÁGINA: Este PDF puede tener 1, 2 o más páginas. CADA página puede contener:
+  • Solo el frente de la INE
+  • Solo el reverso de la INE
+  • Ambas caras juntas
+  • Texto adicional o márgenes
+
+⚠️ ROTACIÓN: Cualquier página/imagen puede estar rotada 90°, 180° o 270°, o aparecer "de lado". DEBES leer el texto en CUALQUIER orientación rotando mentalmente la imagen. NO ignores páginas por estar rotadas — extrae los datos de TODAS las páginas.
+
+INSTRUCCIONES:
+1. Examina TODAS las páginas del PDF.
+2. Para cada página, identifica si muestra el frente, el reverso, o ambas caras.
+3. Si una página está rotada, mentalmente rótala para leer el texto correctamente.
+4. Combina los datos de TODAS las páginas en un solo resultado.
+5. Si encuentras el frente en una página y el reverso en otra, llena ambos.
+
+ESTRUCTURA DE LA INE:
+- FRENTE: foto del titular, NOMBRE, DOMICILIO (calle+número / colonia / CP / municipio / estado), CLAVE DE ELECTOR, CURP, VIGENCIA, sexo, fecha de nacimiento.
   El campo DOMICILIO suele tener 2-3 líneas: "CALLE NUMERO / COL COLONIA CP / MUNICIPIO, SON."
-- REVERSO: códigos de barras, firma, huella y al fondo 3 líneas MRZ.
+- REVERSO: códigos de barras, firma, huella, y al fondo 3 líneas MRZ.
   Primera línea del MRZ: IDMEX[doc_num]<<[numero_ine]. El número INE son los ~12 dígitos después de '<<'.
 
 Responde ÚNICAMENTE con este JSON exacto, sin texto adicional ni markdown:
@@ -60,8 +78,11 @@ Responde ÚNICAMENTE con este JSON exacto, sin texto adicional ni markdown:
   }
 }
 
-Si solo hay un lado, llena ese lado y deja el otro con nulls.
-Usa "ambas" si detectas las dos caras.`
+REGLAS CRÍTICAS:
+- Si encuentras DATOS DEL FRENTE en una página y DATOS DEL REVERSO en otra → "lado": "ambas" y llena ambos objetos.
+- Si solo hay un lado en TODO el PDF → llena ese lado y deja el otro con nulls.
+- NUNCA devuelvas todo null si la imagen contiene una INE — incluso rotada o borrosa, extrae lo que puedas.
+- Si una página está completamente en blanco o no es una INE, ignórala y procesa las demás.`
 
 // ─── POST /api/ocr/ine ────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
@@ -102,19 +123,21 @@ export async function POST(req: NextRequest) {
   const base64      = buffer.toString('base64')
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  const MODELO = 'claude-opus-4-5'
 
   // ── OCR con Claude ───────────────────────────────────────────────────────────
   let ladoDetectado: string = ladoInput ?? 'frente'
   let ocrMerged: Record<string, string | null> = {}
   let ocrFrente: Record<string, string | null> | null = null
   let ocrReverso: Record<string, string | null> | null = null
+  let ultimoUsage: any = null
 
   try {
     if (isPDF) {
-      // ── PDF: enviar como documento, Claude auto-detecta caras ───────────────
+      // ── PDF: enviar como documento, Claude auto-detecta caras y rotación ────
       const message = await anthropic.messages.create({
-        model: 'claude-opus-4-5',
-        max_tokens: 1024,
+        model: MODELO,
+        max_tokens: 2048,
         messages: [{
           role: 'user',
           content: [
@@ -126,6 +149,7 @@ export async function POST(req: NextRequest) {
           ],
         }],
       })
+      ultimoUsage = message.usage
       const text = message.content[0]
       if (text.type === 'text') {
         const parsed = JSON.parse(text.text.replace(/```json|```/g, '').trim())
@@ -151,8 +175,8 @@ export async function POST(req: NextRequest) {
     } else {
       // ── Imagen: flujo original ─────────────────────────────────────────────
       const message = await anthropic.messages.create({
-        model: 'claude-opus-4-5',
-        max_tokens: 512,
+        model: MODELO,
+        max_tokens: 1024,
         messages: [{
           role: 'user',
           content: [
@@ -164,6 +188,7 @@ export async function POST(req: NextRequest) {
           ],
         }],
       })
+      ultimoUsage = message.usage
       const text = message.content[0]
       if (text.type === 'text') {
         const parsed = JSON.parse(text.text.replace(/```json|```/g, '').trim())
@@ -182,8 +207,11 @@ export async function POST(req: NextRequest) {
         }
       }
     }
-  } catch {
-    return NextResponse.json({ error: 'No se pudo procesar el archivo con IA. Intenta con mejor calidad.' }, { status: 422 })
+  } catch (e: any) {
+    console.error('[ocr/ine] Error procesando archivo:', e?.message, e)
+    return NextResponse.json({
+      error: 'No se pudo procesar el archivo con IA. Verifica que sea una INE legible. Detalle: ' + (e?.message ?? 'desconocido'),
+    }, { status: 422 })
   }
 
   // ── Upload a Storage (solo si hay entityId) ──────────────────────────────────
@@ -239,11 +267,27 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── Registrar costo de IA ────────────────────────────────────────────────
+  let costoUSD = 0
+  if (ultimoUsage) {
+    const dbAdmin = await createServiceClient()
+    costoUSD = await registrarCostoIA({
+      supabase:      dbAdmin,
+      usuarioId:     user.id,
+      expedienteId:  null,            // OCR de INE es pre-expediente
+      endpoint:      'ocr/ine',
+      modelo:        MODELO,
+      usage:         ultimoUsage,
+      detalle:       { entity_type: entityType, lado: ladoDetectado },
+    })
+  }
+
   return NextResponse.json({
     ocr: ocrMerged,
     ocr_frente: ocrFrente,
     ocr_reverso: ocrReverso,
     lado: ladoDetectado,
     storagePaths,
+    costo_usd: costoUSD,
   })
 }

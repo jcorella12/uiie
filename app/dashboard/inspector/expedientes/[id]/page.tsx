@@ -3,17 +3,21 @@ import Link from 'next/link'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { formatDate, formatDateShort, EXPEDIENTE_STATUS_LABELS, INSPECCION_STATUS_LABELS } from '@/lib/utils'
 import SubirDocumentosMasivo from '@/components/expedientes/SubirDocumentosMasivo'
+import SubirDocumentoForm from '@/components/expedientes/SubirDocumentoForm'
 import EliminarDocumentoBtn from '@/components/expedientes/EliminarDocumentoBtn'
 import SubirDocumentoIA from '@/components/expedientes/SubirDocumentoIA'
 import EvidenciaVisitaSection from '@/components/expedientes/EvidenciaVisitaSection'
 import CertificadoSection from '@/components/expedientes/CertificadoSection'
 import RevisionSection from '@/components/expedientes/RevisionSection'
+import DescargarRespaldoZip from '@/components/expedientes/DescargarRespaldoZip'
+import CollapsibleCard from '@/components/ui/CollapsibleCard'
 import { ExpedienteProgressBar } from '@/components/expedientes/ExpedienteProgressBar'
 import { BotonesPDF } from '@/components/expedientes/BotonesPDF'
 import { ChecklistRevision } from '@/components/expedientes/ChecklistRevision'
 import MedidorCaptura from '@/components/ocr/MedidorCaptura'
 import InfoTecnicaForm from '@/components/expedientes/InfoTecnicaForm'
 import InfoComplementariaForm from '@/components/expedientes/InfoComplementariaForm'
+import { StatusBadge, EXPEDIENTE_STATUS, INSPECCION_STATUS, DICTAMEN_RESULTADO } from '@/components/ui/StatusBadge'
 import {
   ArrowLeft,
   Calendar,
@@ -25,37 +29,11 @@ import {
   ClipboardCheck,
   Camera,
   Users,
+  CheckCircle2,
+  AlertTriangle,
 } from 'lucide-react'
 
-// ─── Badge helpers ────────────────────────────────────────────────────────────
-
-const EXPEDIENTE_STATUS_BADGE: Record<string, string> = {
-  borrador: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700',
-  en_proceso: 'badge-en_revision',
-  revision: 'badge-pendiente',
-  aprobado: 'badge-aprobada',
-  rechazado: 'badge-rechazada',
-  devuelto: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800',
-  cerrado: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600',
-}
-
-const INSPECCION_STATUS_BADGE: Record<string, string> = {
-  programada: 'badge-pendiente',
-  en_curso: 'badge-en_revision',
-  realizada: 'badge-aprobada',
-  cancelada: 'badge-rechazada',
-}
-
-const DICTAMEN_RESULTADO_BADGE: Record<string, string> = {
-  aprobado: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800',
-  rechazado: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800',
-  condicionado: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800',
-}
-const DICTAMEN_RESULTADO_LABEL: Record<string, string> = {
-  aprobado: 'Aprobado',
-  rechazado: 'Rechazado',
-  condicionado: 'Condicionado',
-}
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const DOCUMENTO_TIPO_LABELS: Record<string, string> = {
   contrato:          'Contrato',
@@ -63,6 +41,8 @@ const DOCUMENTO_TIPO_LABELS: Record<string, string> = {
   memoria_tecnica:   'Memoria Técnica',
   dictamen:          'Dictamen',
   acta:              'Acta',
+  resolutivo:        'Resolutivo CFE',
+  ficha_pago:        'Ficha de Pago',
   fotografia:        'Fotografía',
   certificado_cre:   'Certificado CNE',
   acuse_cre:         'Acuse CNE',
@@ -76,18 +56,21 @@ function Section({
   id,
   icon,
   title,
+  action,
   children,
 }: {
   id: string
   icon: React.ReactNode
   title: string
+  action?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
     <div id={id} className="card scroll-mt-6">
       <div className="flex items-center gap-2 mb-5 pb-4 border-b border-gray-100">
         <span className="text-brand-green">{icon}</span>
-        <h2 className="text-base font-semibold text-gray-800">{title}</h2>
+        <h2 className="text-base font-semibold text-gray-800 flex-1">{title}</h2>
+        {action}
       </div>
       {children}
     </div>
@@ -140,6 +123,7 @@ export default async function ExpedienteDetailPage({
     { data: expedienteTestigos },
     { data: testigosCatalogo },
     { data: certificadosCNE },
+    { data: solicitudPrecio },
   ] = await Promise.all([
     db
       .from('documentos_expediente')
@@ -182,6 +166,11 @@ export default async function ExpedienteDetailPage({
       .select('id, numero_certificado, fecha_emision, url_cre, url_acuse')
       .eq('expediente_id', params.id)
       .order('created_at', { ascending: false }),
+    db
+      .from('solicitudes_folio')
+      .select('precio_propuesto')
+      .eq('folio_asignado_id', (expediente as any).folio_id)
+      .maybeSingle(),
   ])
 
   const cliente = expediente.cliente as any
@@ -196,12 +185,8 @@ export default async function ExpedienteDetailPage({
   ) as any | undefined
   const ejecutorActivo = ultimaInspeccion?.inspector_ejecutor as { nombre: string; apellidos?: string } | null
 
-  const statusBadgeClass =
-    EXPEDIENTE_STATUS_BADGE[expediente.status] ??
-    'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600'
-  const statusLabel =
-    EXPEDIENTE_STATUS_LABELS[expediente.status as keyof typeof EXPEDIENTE_STATUS_LABELS] ??
-    expediente.status
+  // statusLabel/badge ahora se renderiza con <StatusBadge dictionary={EXPEDIENTE_STATUS} />
+  const statusLabel = EXPEDIENTE_STATUS[expediente.status]?.label ?? expediente.status
 
   // Signed URL helper — bucket 'documentos' is private
   async function getPublicUrl(path: string) {
@@ -238,7 +223,7 @@ export default async function ExpedienteDetailPage({
               <span className="font-mono text-xl font-bold text-brand-green tracking-wide">
                 {folioNumero}
               </span>
-              <span className={statusBadgeClass}>{statusLabel}</span>
+              <StatusBadge status={expediente.status} dictionary={EXPEDIENTE_STATUS} size="sm" />
             </div>
             <p className="text-lg font-semibold text-gray-900">
               {cliente?.nombre ?? '—'}
@@ -287,43 +272,67 @@ export default async function ExpedienteDetailPage({
           <ExpedienteProgressBar status={expediente.status} />
         </div>
 
-        {/* Anchor nav tabs */}
-        <div className="mt-4 pt-3 border-t border-gray-100 flex flex-wrap gap-2 items-center">
-          {[
-            { href: '#info-tecnica', label: 'Info Técnica' },
-            { href: '#info-complementaria', label: 'Info Complementaria' },
-            { href: '#agenda', label: 'Agenda' },
-            { href: '#checklist', label: 'Checklist' },
-            { href: '#evidencia', label: 'Evidencia' },
-            ...(esAdmin && ['aprobado', 'cerrado'].includes(expediente.status) ? [{ href: '#certificado', label: 'Certificado' }] : []),
-            { href: '#documentos', label: 'Documentos' },
-            { href: '#revision', label: esAdmin ? 'Revisión' : 'Enviar a Revisión' },
-          ].map(({ href, label }) => (
-            <a
-              key={href}
-              href={href}
-              className="text-xs font-medium px-3 py-1.5 rounded-full border border-brand-green/30 text-brand-green hover:bg-brand-green-light transition-colors"
-            >
-              {label}
-            </a>
-          ))}
-          {/* Indicador de checklist */}
+        {/* Anchor nav tabs — scroll horizontal en móvil con snap; flex-wrap en desktop */}
+        <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-2">
+          <div className="flex gap-2 overflow-x-auto sm:flex-wrap pb-1 sm:pb-0 -mx-1 px-1 snap-x snap-mandatory scrollbar-thin">
+            {[
+              { href: '#info-tecnica', label: 'Info Técnica' },
+              { href: '#info-complementaria', label: 'Info Compl.' },
+              { href: '#agenda', label: 'Agenda' },
+              { href: '#checklist', label: 'Checklist' },
+              { href: '#evidencia', label: 'Evidencia' },
+              ...(esAdmin && ['aprobado', 'cerrado'].includes(expediente.status) ? [{ href: '#certificado', label: 'Certificado' }] : []),
+              { href: '#documentos', label: 'Documentos' },
+              { href: '#revision', label: esAdmin ? 'Revisión' : 'Enviar a Revisión' },
+            ].map(({ href, label }) => (
+              <a
+                key={href}
+                href={href}
+                className="snap-start whitespace-nowrap text-xs font-medium px-3 py-1.5 rounded-full border border-brand-green/30 text-brand-green hover:bg-brand-green-light transition-colors flex-shrink-0"
+              >
+                {label}
+              </a>
+            ))}
+          </div>
+          {/* Indicador de checklist — clickable para ir al detalle */}
           {expediente.checklist_pct != null && (
-            <span className={`ml-auto text-xs font-semibold px-2.5 py-1 rounded-full ${
-              expediente.checklist_pct >= 100
-                ? 'bg-green-100 text-green-700'
-                : expediente.checklist_pct > 0
-                ? 'bg-orange-100 text-orange-700'
-                : 'bg-gray-100 text-gray-500'
-            }`}>
-              ✓ {expediente.checklist_pct}%
-            </span>
+            <a
+              href="#checklist"
+              title={
+                expediente.checklist_pct >= 100
+                  ? 'Checklist completo · Listo para enviar a revisión'
+                  : `Checklist al ${expediente.checklist_pct}% · Click para ver qué falta`
+              }
+              className={`ml-auto inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full transition-all hover:shadow-sm ${
+                expediente.checklist_pct >= 100
+                  ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                  : expediente.checklist_pct > 0
+                  ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <span>{expediente.checklist_pct >= 100 ? '✓' : '⚠'}</span>
+              <span>Checklist {expediente.checklist_pct}%</span>
+              {expediente.checklist_pct < 100 && (
+                <span className="text-[10px] opacity-75 hidden sm:inline">· ver pendientes</span>
+              )}
+            </a>
           )}
         </div>
       </div>
 
-      {/* ── Sección 1: Información Técnica ── */}
-      <Section id="info-tecnica" icon={<Zap className="w-5 h-5" />} title="Información Técnica">
+      {/* ── Sección 1: Información Técnica — colapsable ── */}
+      <CollapsibleCard
+        id="info-tecnica"
+        icon={<Zap className="w-5 h-5" />}
+        title="Información Técnica"
+        defaultOpen={false}
+        summary={[
+          expediente.kwp ? `${expediente.kwp} kWp` : null,
+          expediente.num_paneles ? `${expediente.num_paneles} paneles` : null,
+          expediente.ciudad,
+        ].filter(Boolean).join(' · ') || 'Sin capturar'}
+      >
         <InfoTecnicaForm
           expediente={{
             id:                       params.id,
@@ -391,10 +400,21 @@ export default async function ExpedienteDetailPage({
             />
           </div>
         </details>}
-      </Section>
+      </CollapsibleCard>
 
-      {/* ── Sección 1b: Información Complementaria ── */}
-      <Section id="info-complementaria" icon={<Users className="w-5 h-5" />} title="Información Complementaria">
+      {/* ── Sección 1b: Información Complementaria — colapsable ── */}
+      <CollapsibleCard
+        id="info-complementaria"
+        icon={<Users className="w-5 h-5" />}
+        title="Información Complementaria"
+        defaultOpen={false}
+        summary={cliente
+          ? [
+              (cliente as any).firmante_nombre ? `Firmante: ${(cliente as any).firmante_nombre}` : null,
+              (cliente as any).atiende_nombre ? `Atiende: ${(cliente as any).atiende_nombre}` : null,
+            ].filter(Boolean).join(' · ') || 'Click para editar'
+          : 'Click para editar'}
+      >
         <InfoComplementariaForm
           expedienteId={params.id}
           cliente={cliente ? {
@@ -417,93 +437,215 @@ export default async function ExpedienteDetailPage({
           testigos={(testigosCatalogo ?? []) as any[]}
           readOnly={['cerrado', 'aprobado'].includes(expediente.status)}
         />
-      </Section>
+      </CollapsibleCard>
 
       {/* ── Sección 2: Agenda de Inspecciones ── */}
-      <Section id="agenda" icon={<Calendar className="w-5 h-5" />} title="Agenda de Inspecciones">
+      <Section
+        id="agenda"
+        icon={<Calendar className="w-5 h-5" />}
+        title="Agenda de Inspecciones"
+        action={expediente.status !== 'cerrado' && (
+          <Link
+            href={`/dashboard/inspector/agenda/nueva?expediente_id=${params.id}`}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand-green text-white text-xs font-semibold rounded-lg hover:bg-brand-green/90 transition-colors shadow-sm"
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            Programar inspección
+          </Link>
+        )}
+      >
         {!inspecciones?.length ? (
-          <div className="text-center py-10 text-gray-400">
-            <Calendar className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            <p className="text-sm font-medium text-gray-500">Sin inspecciones programadas</p>
-            <p className="text-xs mt-1">Programa la primera inspección usando el enlace de abajo.</p>
+          <div className="text-center py-10">
+            <Calendar className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+            <p className="text-sm font-medium text-gray-600 mb-1">Sin inspecciones programadas</p>
+            <p className="text-xs text-gray-400 mb-4">Programa la primera visita al sitio</p>
+            {expediente.status !== 'cerrado' && (
+              <Link
+                href={`/dashboard/inspector/agenda/nueva?expediente_id=${params.id}`}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-brand-green text-white text-sm font-semibold rounded-lg hover:bg-brand-green/90 transition-colors shadow-sm"
+              >
+                <Calendar className="w-4 h-4" />
+                Programar inspección
+              </Link>
+            )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left py-2.5 px-2 font-medium text-gray-500">Fecha y hora</th>
-                  <th className="text-left py-2.5 px-2 font-medium text-gray-500">Dirección</th>
-                  <th className="text-center py-2.5 px-2 font-medium text-gray-500">Estado</th>
-                  <th className="text-left py-2.5 px-2 font-medium text-gray-500">Inspector</th>
-                  <th className="text-left py-2.5 px-2 font-medium text-gray-500">Testigo</th>
-                </tr>
-              </thead>
-              <tbody>
-                {inspecciones.map((insp: any) => {
-                  const testigo = insp.testigo as any
-                  const ejecutor = insp.inspector_ejecutor as { nombre: string; apellidos?: string } | null
-                  const badgeClass =
-                    INSPECCION_STATUS_BADGE[insp.status] ??
-                    'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600'
-                  const statusLabel =
-                    INSPECCION_STATUS_LABELS[insp.status as keyof typeof INSPECCION_STATUS_LABELS] ??
-                    insp.status
-                  return (
-                    <tr key={insp.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
-                      <td className="py-2.5 px-2 text-gray-800 whitespace-nowrap">
+          <>
+            {/* Banner: próxima inspección programada */}
+            {(() => {
+              const ahora = Date.now()
+              const proxima = (inspecciones ?? [])
+                .filter((i: any) => i.fecha_hora && new Date(i.fecha_hora).getTime() >= ahora && ['programada', 'en_curso'].includes(i.status))
+                .sort((a: any, b: any) => new Date(a.fecha_hora).getTime() - new Date(b.fecha_hora).getTime())[0]
+              if (!proxima) return null
+
+              const fecha = new Date(proxima.fecha_hora)
+              const diasRestantes = Math.ceil((fecha.getTime() - ahora) / (1000 * 60 * 60 * 24))
+              const esHoy        = diasRestantes === 0
+              const esMañana     = diasRestantes === 1
+              const esEstaSemana = diasRestantes >= 0 && diasRestantes <= 7
+
+              return (
+                <div className={`mb-4 rounded-xl border-2 p-4 ${
+                  esHoy ? 'border-orange-300 bg-orange-50' :
+                  esEstaSemana ? 'border-emerald-200 bg-emerald-50' :
+                  'border-blue-200 bg-blue-50'
+                }`}>
+                  <div className="flex items-start gap-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                      esHoy ? 'bg-orange-500' :
+                      esEstaSemana ? 'bg-emerald-500' :
+                      'bg-blue-500'
+                    }`}>
+                      <Calendar className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs font-semibold uppercase tracking-wider ${
+                        esHoy ? 'text-orange-600' :
+                        esEstaSemana ? 'text-emerald-600' :
+                        'text-blue-600'
+                      }`}>
+                        {esHoy ? '⚡ Inspección hoy' :
+                         esMañana ? 'Próxima inspección — mañana' :
+                         esEstaSemana ? `Próxima inspección — en ${diasRestantes} días` :
+                         'Próxima inspección programada'}
+                      </p>
+                      <p className="text-base font-bold text-gray-900 mt-0.5 capitalize">
+                        {fecha.toLocaleDateString('es-MX', {
+                          weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+                        })}
+                      </p>
+                      <p className="text-sm text-gray-700 font-medium">
+                        🕐 {fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} hrs
+                      </p>
+                      {proxima.direccion && (
+                        <p className="text-xs text-gray-500 mt-1">
+                          📍 {proxima.direccion}
+                        </p>
+                      )}
+                      {(proxima.testigo || proxima.inspector_ejecutor) && (
+                        <div className="flex flex-wrap gap-3 mt-2 text-xs text-gray-600">
+                          {proxima.inspector_ejecutor && (
+                            <span>
+                              <span className="text-gray-400">Inspector:</span>{' '}
+                              <span className="font-medium">{`${(proxima.inspector_ejecutor as any).nombre} ${(proxima.inspector_ejecutor as any).apellidos ?? ''}`.trim()}</span>
+                            </span>
+                          )}
+                          {proxima.testigo && (
+                            <span>
+                              <span className="text-gray-400">Testigo:</span>{' '}
+                              <span className="font-medium">{`${(proxima.testigo as any).nombre} ${(proxima.testigo as any).apellidos ?? ''}`.trim()}</span>
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <StatusBadge status={proxima.status} dictionary={INSPECCION_STATUS} size="sm" />
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Móvil: cards apiladas */}
+            <div className="sm:hidden space-y-2">
+              {inspecciones.map((insp: any) => {
+                const testigo = insp.testigo as any
+                const ejecutor = insp.inspector_ejecutor as { nombre: string; apellidos?: string } | null
+                return (
+                  <div key={insp.id} className="rounded-lg border border-gray-200 p-3 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <p className="font-semibold text-sm text-gray-800">
                         {insp.fecha_hora
                           ? new Date(insp.fecha_hora).toLocaleDateString('es-MX', {
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
+                              year: 'numeric', month: 'short', day: 'numeric',
+                              hour: '2-digit', minute: '2-digit',
                             })
-                          : '—'}
-                      </td>
-                      <td className="py-2.5 px-2 text-gray-600 max-w-[200px] truncate">
-                        {insp.direccion ?? '—'}
-                      </td>
-                      <td className="py-2.5 px-2 text-center">
-                        <span className={badgeClass}>{statusLabel}</span>
-                      </td>
-                      <td className="py-2.5 px-2 text-gray-600">
-                        {ejecutor ? (
-                          <span className="inline-flex items-center gap-1.5">
-                            <span>{`${ejecutor.nombre} ${ejecutor.apellidos ?? ''}`.trim()}</span>
-                            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 leading-none">
-                              delegado
+                          : 'Fecha pendiente'}
+                      </p>
+                      <StatusBadge status={insp.status} dictionary={INSPECCION_STATUS} size="xs" />
+                    </div>
+                    {insp.direccion && (
+                      <p className="text-xs text-gray-500 mb-1.5">📍 {insp.direccion}</p>
+                    )}
+                    <div className="flex flex-col gap-1 text-xs text-gray-600">
+                      {ejecutor && (
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-gray-400">Inspector:</span>
+                          {`${ejecutor.nombre} ${ejecutor.apellidos ?? ''}`.trim()}
+                          <span className="text-[9px] font-semibold px-1 rounded bg-amber-100 text-amber-700">delegado</span>
+                        </span>
+                      )}
+                      {testigo && (
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-gray-400">Testigo:</span>
+                          {`${testigo.nombre} ${testigo.apellidos ?? ''}`.trim()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Desktop: tabla */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100">
+                    <th className="text-left py-2.5 px-2 font-medium text-gray-500">Fecha y hora</th>
+                    <th className="text-left py-2.5 px-2 font-medium text-gray-500">Dirección</th>
+                    <th className="text-center py-2.5 px-2 font-medium text-gray-500">Estado</th>
+                    <th className="text-left py-2.5 px-2 font-medium text-gray-500">Inspector</th>
+                    <th className="text-left py-2.5 px-2 font-medium text-gray-500">Testigo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inspecciones.map((insp: any) => {
+                    const testigo = insp.testigo as any
+                    const ejecutor = insp.inspector_ejecutor as { nombre: string; apellidos?: string } | null
+                    return (
+                      <tr key={insp.id} className="border-b border-gray-50 hover:bg-gray-50 transition-colors">
+                        <td className="py-2.5 px-2 text-gray-800 whitespace-nowrap">
+                          {insp.fecha_hora
+                            ? new Date(insp.fecha_hora).toLocaleDateString('es-MX', {
+                                year: 'numeric', month: 'short', day: 'numeric',
+                                hour: '2-digit', minute: '2-digit',
+                              })
+                            : '—'}
+                        </td>
+                        <td className="py-2.5 px-2 text-gray-600 max-w-[200px] truncate">
+                          {insp.direccion ?? '—'}
+                        </td>
+                        <td className="py-2.5 px-2 text-center">
+                          <StatusBadge status={insp.status} dictionary={INSPECCION_STATUS} size="sm" />
+                        </td>
+                        <td className="py-2.5 px-2 text-gray-600">
+                          {ejecutor ? (
+                            <span className="inline-flex items-center gap-1.5">
+                              <span>{`${ejecutor.nombre} ${ejecutor.apellidos ?? ''}`.trim()}</span>
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 leading-none">
+                                delegado
+                              </span>
                             </span>
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">—</span>
-                        )}
-                      </td>
-                      <td className="py-2.5 px-2 text-gray-600">
-                        {testigo
-                          ? `${testigo.nombre} ${testigo.apellidos ?? ''}`.trim()
-                          : <span className="text-gray-400">—</span>}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
+                        <td className="py-2.5 px-2 text-gray-600">
+                          {testigo
+                            ? `${testigo.nombre} ${testigo.apellidos ?? ''}`.trim()
+                            : <span className="text-gray-400">—</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
 
-        {expediente.status !== 'cerrado' && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <Link
-              href={`/dashboard/inspector/agenda/nueva?expediente_id=${params.id}`}
-              className="inline-flex items-center gap-1.5 text-sm text-brand-green hover:underline font-medium"
-            >
-              Programar inspección
-              <ChevronRight className="w-4 h-4" />
-            </Link>
-          </div>
-        )}
+        {/* Botón programar movido al header de la sección (action prop) */}
       </Section>
 
       {/* ── Sección 4: Checklist de Revisión ── */}
@@ -523,7 +665,7 @@ export default async function ExpedienteDetailPage({
             inversor_id:            expediente.inversor_id            ?? null,
           }}
           documentosTipos={(documentos ?? []).map((d: any) => d.tipo)}
-          tieneTestigos={(inspecciones ?? []).some((i: any) => i.testigo_id)}
+          tieneTestigos={(expedienteTestigos ?? []).length > 0 || (inspecciones ?? []).some((i: any) => i.testigo_id)}
         />
       </div>
 
@@ -548,6 +690,18 @@ export default async function ExpedienteDetailPage({
           certificadosCNE={(certificadosCNE ?? []) as any}
         />
 
+        {/* ── Descarga de respaldo ZIP — disponible cuando hay certificado o expediente cerrado ── */}
+        {(((certificadosCNE ?? []).length > 0) || expediente.status === 'cerrado') && (
+          <div className="mt-6 pt-5 border-t border-gray-100">
+            <DescargarRespaldoZip
+              expedienteId={params.id}
+              folioInterno={expediente.numero_folio}
+              yaDescargadoEn={(expediente as any).respaldo_descargado_at ?? null}
+              yaArchivadoEn={(expediente as any).respaldo_archivado_at ?? null}
+            />
+          </div>
+        )}
+
         {/* Dictamen técnico — secundario */}
         <div className="mt-6 pt-5 border-t border-gray-100">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
@@ -555,12 +709,7 @@ export default async function ExpedienteDetailPage({
           </p>
           {dictamen ? (
             <div className="flex items-center gap-3 flex-wrap">
-              <span className={
-                DICTAMEN_RESULTADO_BADGE[dictamen.resultado] ??
-                'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700'
-              }>
-                {DICTAMEN_RESULTADO_LABEL[dictamen.resultado] ?? dictamen.resultado}
-              </span>
+              <StatusBadge status={dictamen.resultado} dictionary={DICTAMEN_RESULTADO} size="sm" />
               {dictamen.fecha_emision && (
                 <span className="text-sm text-gray-500">
                   Emitido el {formatDate(dictamen.fecha_emision)}
@@ -592,6 +741,37 @@ export default async function ExpedienteDetailPage({
           status={expediente.status}
           checklistPct={expediente.checklist_pct ?? 0}
           isAuxiliar={isAuxiliar}
+          validacion={{
+            cliente_nombre:    (cliente as any)?.nombre ?? expediente.nombre_cliente_final,
+            firmante_nombre:   (cliente as any)?.firmante_nombre,
+            firmante_curp:     (cliente as any)?.firmante_curp,
+            atiende_nombre:    (cliente as any)?.atiende_nombre,
+            kwp:               expediente.kwp,
+            num_paneles:       expediente.num_paneles,
+            potencia_panel_wp: expediente.potencia_panel_wp,
+            marca_inversor:    (expediente as any).inversor ? `${(expediente as any).inversor.marca} ${(expediente as any).inversor.modelo}` : null,
+            num_inversores:    expediente.num_inversores,
+            numero_medidor:    expediente.numero_medidor,
+            precio:            (solicitudPrecio as any)?.precio_propuesto ?? (expediente as any).precio_propuesto ?? null,
+            tipo_conexion:     expediente.tipo_conexion,
+            tipo_central:      expediente.tipo_central,
+            direccion_proyecto: expediente.direccion_proyecto,
+            ciudad:            expediente.ciudad,
+            estado_mx:         expediente.estado_mx,
+            resolutivo_folio:  expediente.resolutivo_folio,
+            resolutivo_fecha:  expediente.resolutivo_fecha,
+            dictamen_folio_dvnp: expediente.dictamen_folio_dvnp,
+            tiene_i1_i2:                 expediente.tiene_i1_i2,
+            tiene_interruptor_exclusivo: expediente.tiene_interruptor_exclusivo,
+            tiene_ccfp:                  expediente.tiene_ccfp,
+            tiene_proteccion_respaldo:   expediente.tiene_proteccion_respaldo,
+            documentosTipos:   (documentos ?? []).map((d: any) => d.tipo),
+            // Hay testigo si está asignado al expediente (expediente_testigos) o
+            // si alguna inspección tiene testigo asignado directamente
+            tieneTestigos:     (expedienteTestigos ?? []).length > 0
+                               || (inspecciones ?? []).some((i: any) => i.testigo_id),
+            tieneInspeccion:   (inspecciones ?? []).length > 0,
+          }}
         />
       )}
 
@@ -627,6 +807,69 @@ export default async function ExpedienteDetailPage({
             readOnly={expediente.status === 'cerrado'}
           />
         </div>
+
+        {/* ── Ficha de pago: solo si el resolutivo tiene cobro ── */}
+        {expediente.resolutivo_tiene_cobro === true && (() => {
+          const fichaPago = documentosConUrl.find((d: any) => d.tipo === 'ficha_pago')
+          const yaSubida = !!fichaPago
+
+          return (
+            <div className={`mb-6 rounded-xl border-2 ${
+              yaSubida
+                ? 'border-emerald-200 bg-emerald-50/40'
+                : 'border-amber-300 bg-amber-50'
+            } p-4`}>
+              <div className="flex items-start gap-3 mb-3">
+                <div className={`w-9 h-9 ${yaSubida ? 'bg-emerald-500' : 'bg-amber-500'} rounded-lg flex items-center justify-center flex-shrink-0`}>
+                  {yaSubida
+                    ? <CheckCircle2 className="w-5 h-5 text-white" />
+                    : <AlertTriangle className="w-5 h-5 text-white" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`font-semibold text-sm ${yaSubida ? 'text-emerald-900' : 'text-amber-900'}`}>
+                    {yaSubida ? 'Ficha de pago cargada' : 'Falta cargar la Ficha de Pago'}
+                  </p>
+                  <p className={`text-xs mt-0.5 ${yaSubida ? 'text-emerald-700' : 'text-amber-800'}`}>
+                    El Resolutivo CFE incluye un cobro
+                    {expediente.resolutivo_monto != null && (
+                      <> de <strong>${Number(expediente.resolutivo_monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })}</strong></>
+                    )}
+                    {expediente.resolutivo_referencia && (
+                      <> · Ref: <span className="font-mono">{expediente.resolutivo_referencia}</span></>
+                    )}
+                    . {yaSubida
+                      ? 'El comprobante de pago ya está adjunto al expediente.'
+                      : 'Es obligatorio adjuntar la ficha o comprobante de pago para completar el expediente.'}
+                  </p>
+
+                  {yaSubida && fichaPago && (
+                    <div className="mt-2 flex items-center gap-2 text-xs text-emerald-700">
+                      <FileText className="w-3.5 h-3.5" />
+                      <span className="truncate">{fichaPago.nombre}</span>
+                      {fichaPago.publicUrl && (
+                        <a href={fichaPago.publicUrl} target="_blank" rel="noopener noreferrer"
+                          className="text-brand-green hover:underline ml-auto">
+                          <Eye className="w-3.5 h-3.5" />
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {!yaSubida && expediente.status !== 'cerrado' && (
+                <div className="bg-white rounded-lg p-3 border border-amber-200">
+                  <SubirDocumentoForm
+                    expedienteId={params.id}
+                    tipoDefecto="ficha_pago"
+                    tiposPermitidos={['ficha_pago']}
+                    tituloSeccion="Subir ficha de pago"
+                  />
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         <div className="border-t border-gray-100 pt-5 mb-2">
           <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Otros documentos</p>
@@ -739,6 +982,7 @@ export default async function ExpedienteDetailPage({
           ultimoEnvio={ultimoEnvio ?? null}
           esAdmin={esAdmin}
           folio={folioNumero}
+          certificadoEmitido={(certificadosCNE ?? []).length > 0}
         />
       </Section>
     </div>

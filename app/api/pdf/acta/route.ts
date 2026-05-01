@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
       ),
       testigos:expediente_testigos(
         orden,
-        testigo:testigos(nombre, apellidos, numero_ine, direccion)
+        testigo:testigos(nombre, apellidos, numero_ine, direccion, domicilio, ocr_domicilio)
       )
     `)
     .eq('id', id)
@@ -120,17 +120,17 @@ export async function GET(req: NextRequest) {
     // Quien atiende
     atiende_nombre: cliente?.atiende_nombre ?? cliente?.representante ?? cliente?.nombre ?? '—',
     atiende_identificacion: 'Instituto Nacional Electoral (INE)',
-    atiende_numero_id: cliente?.atiende_numero_id ?? '—',
+    atiende_numero_id: cliente?.atiende_numero_ine ?? '—',
 
-    // Testigos
+    // Testigos — numero_ine y dirección (preferir domicilio o ocr_domicilio del INE)
     testigo1_nombre:      t1 ? `${t1.nombre} ${t1.apellidos ?? ''}`.trim() : '—',
     testigo1_numero_ine:  t1?.numero_ine ?? '—',
     testigo1_identificacion: 'Instituto Nacional Electoral (INE)',
-    testigo1_direccion:   t1?.direccion ?? undefined,
+    testigo1_direccion:   t1?.direccion ?? t1?.domicilio ?? t1?.ocr_domicilio ?? undefined,
     testigo2_nombre:      t2 ? `${t2.nombre} ${t2.apellidos ?? ''}`.trim() : '—',
     testigo2_numero_ine:  t2?.numero_ine ?? '—',
     testigo2_identificacion: 'Instituto Nacional Electoral (INE)',
-    testigo2_direccion:   t2?.direccion ?? undefined,
+    testigo2_direccion:   t2?.direccion ?? t2?.domicilio ?? t2?.ocr_domicilio ?? undefined,
 
     // Cliente final (persona/empresa a quien se emite el certificado)
     cliente_nombre:       (exp as any).nombre_cliente_final ?? cliente?.nombre ?? '—',

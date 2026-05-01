@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const { data: solicitud, error: solError } = await supabase
       .from('solicitudes_folio')
       .select(`
-        id, cliente_id, cliente_epc_id, cliente_nombre, propietario_nombre, kwp, ciudad, estado_mx, fecha_estimada, status, inspector_id,
+        id, cliente_id, cliente_epc_id, cliente_nombre, propietario_nombre, kwp, ciudad, estado_mx, fecha_estimada, status, inspector_id, inspector_ejecutor_id,
         inspector:usuarios!inspector_id(nombre, apellidos, email)
       `)
       .eq('id', solicitudId)
@@ -96,6 +96,8 @@ export async function POST(request: NextRequest) {
       folio_id:     folioId,
       numero_folio: folio.numero_folio,
       inspector_id: solicitud.inspector_id,
+      // Si la solicitud tenía ejecutor delegado, copiarlo al expediente
+      inspector_ejecutor_id: (solicitud as any).inspector_ejecutor_id ?? null,
       kwp:          solicitud.kwp,
       ciudad:       solicitud.ciudad ?? null,
       estado_mx:    solicitud.estado_mx ?? null,

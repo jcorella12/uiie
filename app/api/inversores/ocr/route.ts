@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { registrarCostoIA } from '@/lib/ai/cost'
 
 const PROMPT = `Eres un sistema de extracción de datos técnicos para inversores fotovoltaicos (solares).
 Analiza este documento (puede ser una ficha técnica o un certificado de UL/Intertek/TÜV/etc.) y extrae los datos.
@@ -63,6 +64,8 @@ export async function POST(req: NextRequest) {
   const anthropic = new Anthropic({ apiKey })
 
   let rawExtracted: Record<string, unknown> | Record<string, unknown>[] = {}
+  let costoUSD = 0
+  const MODELO = 'claude-opus-4-5'
   try {
     const content: any[] = []
 
@@ -80,7 +83,7 @@ export async function POST(req: NextRequest) {
     content.push({ type: 'text', text: PROMPT })
 
     const msg = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
+      model: MODELO,
       max_tokens: 2048,
       messages: [{ role: 'user', content }],
     })
@@ -96,6 +99,17 @@ export async function POST(req: NextRequest) {
         error: `La IA no devolvió JSON válido. Respuesta: ${raw.slice(0, 200)}`,
       }, { status: 500 })
     }
+
+    // Registrar costo
+    const dbAdmin = await createServiceClient()
+    costoUSD = await registrarCostoIA({
+      supabase:     dbAdmin,
+      usuarioId:    user.id,
+      expedienteId: null,           // OCR de inversor es de catálogo, no de expediente
+      endpoint:     'inversores/ocr',
+      modelo:       MODELO,
+      usage:        msg.usage,
+    })
 
   } catch (e: any) {
     const msg = e?.message ?? String(e)
@@ -133,6 +147,7 @@ export async function POST(req: NextRequest) {
       extracted:     results[0].extracted,
       existingMatch: results[0].existingMatch,
       fileName:      file.name,
+      costo_usd:     costoUSD,
     })
   }
 
@@ -141,5 +156,6 @@ export async function POST(req: NextRequest) {
     multiple:  true,
     models:    results,
     fileName:  file.name,
+    costo_usd: costoUSD,
   })
 }

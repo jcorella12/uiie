@@ -14,13 +14,24 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { numero_certificado, titulo, url_cre, url_acuse, url_qr, resumen_acta, fecha_emision, expediente_id } = body
+    const {
+      numero_certificado, titulo, url_cre, url_acuse, url_qr,
+      resumen_acta, fecha_emision, expediente_id,
+      storage_path_cert, storage_path_acuse,
+    } = body
 
-    if (!numero_certificado?.trim() || !url_cre?.trim()) {
-      return NextResponse.json({ error: 'Número de certificado y URL del certificado son obligatorios' }, { status: 400 })
+    // Número de certificado siempre requerido
+    if (!numero_certificado?.trim()) {
+      return NextResponse.json({ error: 'Número de certificado requerido' }, { status: 400 })
+    }
+    // Necesitamos AL MENOS uno: URL externa O archivo subido a storage
+    if (!url_cre?.trim() && !storage_path_cert?.trim()) {
+      return NextResponse.json({
+        error: 'Adjunta el PDF del certificado o ingresa el UUID de la bóveda CRE'
+      }, { status: 400 })
     }
 
-    // Validar que las URLs sean HTTPS (prevenir URL injection)
+    // Validar que las URLs sean HTTPS si vienen
     const urlsAValidar = [url_cre, url_acuse, url_qr].filter(Boolean) as string[]
     for (const u of urlsAValidar) {
       if (!u.startsWith('https://')) {
@@ -37,9 +48,11 @@ export async function POST(req: NextRequest) {
       .insert({
         numero_certificado: numero_certificado.trim(),
         titulo:             titulo?.trim()        || null,
-        url_cre:            url_cre.trim(),
+        url_cre:            url_cre?.trim()       || null,
         url_acuse:          url_acuse?.trim()     || null,
         url_qr:             url_qr?.trim()        || null,
+        storage_path_cert:  storage_path_cert?.trim()  || null,
+        storage_path_acuse: storage_path_acuse?.trim() || null,
         resumen_acta:       resumen_acta?.trim()  || null,
         fecha_emision:      fecha_emision         || null,
         expediente_id:      expediente_id         || null,

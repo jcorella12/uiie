@@ -37,6 +37,8 @@ interface Props {
   ultimoEnvio: EnvioRevision | null
   esAdmin: boolean
   folio?: string
+  /** Si ya hay un certificado registrado en la sección Certificado CNE */
+  certificadoEmitido?: boolean
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -47,6 +49,8 @@ const TIPO_LABEL: Record<string, string> = {
   memoria_tecnica: 'Memoria Técnica',
   dictamen:        'Dictamen',
   acta:            'Acta',
+  resolutivo:      'Resolutivo CFE',
+  ficha_pago:      'Ficha de Pago',
   fotografia:      'Fotografía',
   certificado_cre: 'Certificado CNE',
   acuse_cre:       'Acuse CNE',
@@ -70,6 +74,7 @@ export default function RevisionSection({
   ultimoEnvio: ultimoEnvioInicial,
   esAdmin,
   folio,
+  certificadoEmitido = false,
 }: Props) {
   const [notas, setNotas] = useState('')
   const [loading, setLoading] = useState(false)
@@ -225,15 +230,33 @@ export default function RevisionSection({
     setError(null)
     setLoadingCerrar(true)
     try {
-      // 1. Registrar el certificado en la tabla certificados_cre (si hay UUID o PDF leído)
-      if (uuidCert.trim() || certLeido) {
+      // 1. Subir archivos PRIMERO para tener su storage_path
+      async function subirArchivo(file: File, tipo: string): Promise<string | null> {
+        const fd = new FormData()
+        fd.append('file', file)
+        fd.append('tipo', tipo)
+        fd.append('nombre', file.name)
+        fd.append('expediente_id', expedienteId)
+        const res = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+        if (!res.ok) return null
+        const data = await res.json()
+        return data.storage_path ?? null
+      }
+      const storagePathCert  = archivoCert  ? await subirArchivo(archivoCert,  'certificado_cre') : null
+      const storagePathAcuse = archivoAcuse ? await subirArchivo(archivoAcuse, 'acuse_cre')       : null
+
+      // 2. Registrar el certificado — acepta URL externa O archivo subido
+      const tieneAlgo = uuidCert.trim() || certLeido || storagePathCert
+      if (tieneAlgo) {
         const certRes = await fetch('/api/cre/certificados', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            numero_certificado: numCert.trim() || uuidCert.trim() || '—',
+            numero_certificado: numCert.trim() || uuidCert.trim() || folio || '—',
             url_cre:            urlVerificacion ?? (uuidCert.trim() ? creUrl(uuidCert) : null),
             url_acuse:          uuidAcuse.trim() ? creUrl(uuidAcuse) : null,
+            storage_path_cert:  storagePathCert,
+            storage_path_acuse: storagePathAcuse,
             fecha_emision:      fechaCert || null,
             expediente_id:      expedienteId,
           }),
@@ -241,18 +264,6 @@ export default function RevisionSection({
         const certData = await certRes.json()
         if (!certRes.ok) throw new Error(certData.error ?? 'Error al registrar el certificado')
       }
-
-      // 2. Subir archivos si se adjuntaron (best-effort, no bloquea el cierre)
-      async function subirArchivo(file: File, tipo: string) {
-        const fd = new FormData()
-        fd.append('file', file)
-        fd.append('tipo', tipo)
-        fd.append('nombre', file.name)
-        fd.append('expediente_id', expedienteId)
-        await fetch('/api/documentos/subir', { method: 'POST', body: fd })
-      }
-      if (archivoCert)  await subirArchivo(archivoCert,  'certificado_cre')
-      if (archivoAcuse) await subirArchivo(archivoAcuse, 'acuse_cre')
 
       // 3. Cerrar el expediente
       const r = await fetch('/api/expedientes/cerrar', {
@@ -744,189 +755,49 @@ export default function RevisionSection({
         </div>
       )}
 
-      {/* ── Bloque: Certificado emitido (solo admin, solo cuando aprobado) ── */}
+      {/* ── Bloque: Cerrar expediente (solo admin, solo cuando aprobado) ── */}
       {esAdmin && status === 'aprobado' && !cerradoInfo && (
-        <div className="rounded-xl border-2 border-dashed border-emerald-300 bg-emerald-50 p-5 space-y-4">
+        <div className={`rounded-xl border-2 ${
+          certificadoEmitido
+            ? 'border-emerald-300 bg-emerald-50'
+            : 'border-amber-300 bg-amber-50'
+        } p-5 space-y-3`}>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-emerald-100 rounded-lg flex items-center justify-center">
-              <Award className="w-5 h-5 text-emerald-600" />
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+              certificadoEmitido ? 'bg-emerald-100' : 'bg-amber-100'
+            }`}>
+              <Award className={`w-5 h-5 ${certificadoEmitido ? 'text-emerald-600' : 'text-amber-600'}`} />
             </div>
-            <div>
-              <p className="font-semibold text-emerald-900 text-sm">Último paso: emitir el certificado</p>
-              <p className="text-xs text-emerald-600">
-                El paquete fue aprobado. Una vez emitido el certificado, el proceso queda cerrado.
-              </p>
+            <div className="flex-1 min-w-0">
+              {certificadoEmitido ? (
+                <>
+                  <p className="font-semibold text-emerald-900 text-sm">Certificado registrado — listo para cerrar</p>
+                  <p className="text-xs text-emerald-700">
+                    El certificado ya está en la sección "Certificado CNE". Cierra el expediente para finalizar el proceso.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-semibold text-amber-900 text-sm">Falta registrar el certificado</p>
+                  <p className="text-xs text-amber-800">
+                    Antes de cerrar el expediente, sube el certificado en la sección{' '}
+                    <a href="#certificado" className="underline font-medium">Certificado CNE</a> de arriba.
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
-          {!confirmCerrar ? (
+          {certificadoEmitido && (
             <button
-              onClick={() => setConfirmCerrar(true)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-sm"
+              onClick={handleCerrar}
+              disabled={loadingCerrar}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
             >
-              <Award className="w-4 h-4" />
-              Marcar certificado emitido
+              {loadingCerrar
+                ? <><Loader2 className="w-4 h-4 animate-spin" /> Cerrando…</>
+                : <><CheckCircle2 className="w-4 h-4" /> Cerrar expediente</>}
             </button>
-          ) : (
-            <div className="rounded-lg border border-emerald-200 bg-white p-4 space-y-4">
-              <div>
-                <p className="text-sm font-semibold text-gray-800">
-                  Registrar certificado del folio <span className="font-mono text-emerald-700">{folio}</span>
-                </p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  Sube el PDF para que el sistema extraiga los datos automáticamente, o ingresa el UUID manualmente. Esta acción cierra el expediente definitivamente.
-                </p>
-              </div>
-
-              {/* UUID certificado */}
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-600 flex items-center gap-1.5">
-                  UUID del certificado
-                  {certLeido
-                    ? <span className="text-emerald-600 font-normal">(extraído del PDF)</span>
-                    : <span className="text-red-500">*</span>
-                  }
-                </label>
-                <input
-                  type="text"
-                  value={uuidCert}
-                  onChange={e => setUuidCert(e.target.value)}
-                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className={[
-                    'w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400',
-                    certLeido && !uuidCert ? 'border-emerald-300 bg-emerald-50/40' : 'border-gray-200',
-                  ].join(' ')}
-                />
-                {uuidCert && !isValidUuid(uuidCert) && (
-                  <p className="text-xs text-amber-600 flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3" /> Formato UUID inválido
-                  </p>
-                )}
-                {uuidCert && isValidUuid(uuidCert) && (
-                  <p className="text-xs text-emerald-600 flex items-center gap-1">
-                    <CheckCircle2 className="w-3 h-3" /> URL: {CRE_BOVEDA}/{uuidCert.trim()}&hellip;
-                  </p>
-                )}
-                {!uuidCert && certLeido && (
-                  <p className="text-xs text-emerald-600 flex items-center gap-1">
-                    <Sparkles className="w-3 h-3" /> Se usará la URL del PDF para el certificado
-                  </p>
-                )}
-              </div>
-
-              {/* UUID acuse (opcional) */}
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-gray-600">UUID del acuse <span className="text-gray-400">(opcional)</span></label>
-                <input
-                  type="text"
-                  value={uuidAcuse}
-                  onChange={e => setUuidAcuse(e.target.value)}
-                  placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400"
-                />
-              </div>
-
-              {/* Número y fecha (opcionales) */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-gray-600">Número de certificado</label>
-                  <input
-                    type="text"
-                    value={numCert}
-                    onChange={e => setNumCert(e.target.value)}
-                    placeholder="UIIE-CC-00040-2026"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-gray-600">Fecha de emisión</label>
-                  <input
-                    type="date"
-                    value={fechaCert}
-                    onChange={e => setFechaCert(e.target.value)}
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300 focus:border-emerald-400"
-                  />
-                </div>
-              </div>
-
-              {/* Archivos adjuntos */}
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-xs font-medium text-gray-600">Archivos</p>
-                  {leyendoCert && (
-                    <span className="inline-flex items-center gap-1 text-xs text-purple-600 bg-purple-50 border border-purple-200 rounded-full px-2 py-0.5 animate-pulse">
-                      <Loader2 className="w-3 h-3 animate-spin" /> Leyendo PDF con IA…
-                    </span>
-                  )}
-                  {certLeido && !leyendoCert && (
-                    <span className="inline-flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">
-                      <Sparkles className="w-3 h-3" /> Datos extraídos automáticamente
-                    </span>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  {/* PDF Certificado */}
-                  <div>
-                    <input ref={fileCertRef} type="file" accept=".pdf,image/*" className="hidden"
-                      onChange={e => { setArchivoCert(e.target.files?.[0] ?? null); setCertLeido(false) }} />
-                    <button type="button" onClick={() => fileCertRef.current?.click()}
-                      className={[
-                        'w-full text-left text-xs px-3 py-2 border rounded-lg truncate transition-colors',
-                        archivoCert
-                          ? 'border-brand-green bg-emerald-50 text-emerald-700'
-                          : 'border-dashed border-gray-300 text-gray-400 hover:border-brand-green hover:text-brand-green',
-                      ].join(' ')}
-                    >
-                      <Paperclip className="w-3 h-3 inline mr-1" />
-                      {archivoCert ? archivoCert.name : 'PDF certificado…'}
-                    </button>
-                  </div>
-                  {/* PDF Acuse */}
-                  <div>
-                    <input ref={fileAcuseRef} type="file" accept=".pdf,image/*" className="hidden"
-                      onChange={e => setArchivoAcuse(e.target.files?.[0] ?? null)} />
-                    <button type="button" onClick={() => fileAcuseRef.current?.click()}
-                      className={[
-                        'w-full text-left text-xs px-3 py-2 border rounded-lg truncate transition-colors',
-                        archivoAcuse
-                          ? 'border-brand-green bg-emerald-50 text-emerald-700'
-                          : 'border-dashed border-gray-300 text-gray-400 hover:border-brand-green hover:text-brand-green',
-                      ].join(' ')}
-                    >
-                      <Paperclip className="w-3 h-3 inline mr-1" />
-                      {archivoAcuse ? archivoAcuse.name : 'PDF acuse…'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-1">
-                <button
-                  onClick={handleCerrar}
-                  disabled={
-                    loadingCerrar ||
-                    leyendoCert ||
-                    // Necesita UUID válido a menos que el PDF fue leído exitosamente
-                    (!certLeido && (!uuidCert.trim() || !isValidUuid(uuidCert))) ||
-                    // Si tiene UUID pero es inválido, bloquear
-                    (uuidCert.trim() !== '' && !isValidUuid(uuidCert))
-                  }
-                  className="flex items-center gap-2 px-5 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors disabled:opacity-50"
-                >
-                  {loadingCerrar
-                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                    : <CheckCircle2 className="w-4 h-4" />}
-                  Registrar y cerrar expediente
-                </button>
-                <button
-                  onClick={() => { setConfirmCerrar(false); setUuidCert(''); setUuidAcuse(''); setNumCert(''); setFechaCert(''); setArchivoCert(null); setArchivoAcuse(null); setCertLeido(false); setUrlVerificacion(null) }}
-                  disabled={loadingCerrar}
-                  className="px-4 py-2 rounded-lg border border-gray-200 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
           )}
         </div>
       )}

@@ -7,9 +7,10 @@ import { cn, ROLE_LABELS } from '@/lib/utils'
 import { UserRole } from '@/lib/types'
 import {
   LayoutDashboard, FileText, FolderOpen, Calendar,
-  Users, Settings, LogOut, Zap, ChevronDown,
+  Users, Settings, LogOut, ChevronDown,
   ClipboardList, BarChart3, UserCog, Building2, BookUser,
-  Cpu, Globe, FileSpreadsheet, Receipt, UsersRound, Award, X,
+  Cpu, Globe, FileSpreadsheet, Receipt, UsersRound, Award, X, Brain,
+  HelpCircle,
 } from 'lucide-react'
 import NotificationBell from './NotificationBell'
 
@@ -73,6 +74,7 @@ const NAV: Record<UserRole, NavGroup[]> = {
         { href: '/dashboard/conciliacion',           label: 'Conciliación',       icon: BarChart3 },
         { href: '/dashboard/conciliacion/pagos',     label: 'Pagos / Facturas',   icon: Receipt },
         { href: '/dashboard/reporte-trimestral',     label: 'Reporte Trimestral', icon: FileSpreadsheet },
+        { href: '/dashboard/ai-costos',              label: 'Gastos en IA',       icon: Brain },
       ],
     },
   ],
@@ -116,6 +118,7 @@ const NAV: Record<UserRole, NavGroup[]> = {
         { href: '/dashboard/conciliacion',       label: 'Conciliación',       icon: BarChart3 },
         { href: '/dashboard/conciliacion/pagos', label: 'Pagos / Facturas',   icon: Receipt },
         { href: '/dashboard/reporte-trimestral', label: 'Reporte Trimestral', icon: FileSpreadsheet },
+        { href: '/dashboard/ai-costos',          label: 'Gastos en IA',       icon: Brain },
       ],
     },
   ],
@@ -316,8 +319,8 @@ export default function Sidebar({ rol, nombre, onLogout, isOpen, onClose }: {
       {/* ── Logo + botón cerrar móvil ── */}
       <div className="px-5 py-5 border-b border-white/10">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-white/15 rounded-lg flex items-center justify-center">
-            <Zap className="w-4 h-4 text-white" />
+          <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center p-1 shadow-sm">
+            <img src="/logo-ciae-icon.png" alt="CIAE" className="w-full h-full object-contain" />
           </div>
           <div className="flex-1">
             <p className="text-white font-bold text-sm leading-tight">CIAE</p>
@@ -366,6 +369,14 @@ export default function Sidebar({ rol, nombre, onLogout, isOpen, onClose }: {
 
       {/* ── Footer ── */}
       <div className="px-2.5 py-3 border-t border-white/10 space-y-0.5">
+        <Link
+          href="/dashboard/ayuda"
+          onClick={onClose}
+          className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-white/60 hover:bg-white/10 hover:text-white transition-all"
+        >
+          <HelpCircle className="w-4 h-4" />
+          Centro de ayuda
+        </Link>
         <Link
           href="/dashboard/perfil"
           onClick={onClose}

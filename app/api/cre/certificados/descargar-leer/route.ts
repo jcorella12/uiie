@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { registrarCostoIA } from '@/lib/ai/cost'
 
 const CRE_BOVEDA = 'https://cre-boveda.azurewebsites.net/Api/Documento'
 const BUCKET     = 'certificados-cne'
@@ -96,12 +97,14 @@ export async function POST(req: NextRequest) {
 
   // ── 3. Leer con IA ────────────────────────────────────────────────────────────
   let aiData: Record<string, any> = {}
+  let costoUSD = 0
+  const MODELO = 'claude-opus-4-5'
 
   if (tipo === 'certificado') {
     try {
       const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
       const message = await anthropic.messages.create({
-        model:      'claude-opus-4-5',
+        model:      MODELO,
         max_tokens: 512,
         messages: [{
           role: 'user',
@@ -116,6 +119,15 @@ export async function POST(req: NextRequest) {
         const raw = content.text.replace(/^```json\s*/i, '').replace(/```\s*$/i, '').trim()
         aiData = JSON.parse(raw)
       }
+      // Registrar costo
+      costoUSD = await registrarCostoIA({
+        supabase:     svc,
+        usuarioId:    user.id,
+        expedienteId: null,    // Se asigna abajo si encontramos el expediente
+        endpoint:     'cre/certificados/descargar-leer',
+        modelo:       MODELO,
+        usage:        message.usage,
+      })
     } catch (err: any) {
       console.error('[descargar-leer] AI error:', err)
     }
@@ -146,5 +158,6 @@ export async function POST(req: NextRequest) {
     url_storage,
     expediente_id,
     expediente_folio,
+    costo_usd: costoUSD,
   })
 }

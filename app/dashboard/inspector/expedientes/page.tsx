@@ -23,12 +23,13 @@ export default async function MisExpedientes() {
   // ── Fetch expedientes ──────────────────────────────────────────────────────
   let query = db
     .from('expedientes')
-    .select('id, numero_folio, kwp, status, ciudad, fecha_inicio, created_at, orden_inspector, inspector_id, checklist_pct, nombre_cliente_final, cli_completado_at, cliente:clientes(nombre), inspector:usuarios!inspector_id(nombre)')
+    .select('id, numero_folio, kwp, status, ciudad, fecha_inicio, created_at, orden_inspector, inspector_id, inspector_ejecutor_id, checklist_pct, nombre_cliente_final, cli_completado_at, respaldo_descargado_at, respaldo_archivado_at, respaldo_borrado_at, cliente:clientes(nombre), inspector:usuarios!inspector_id(nombre), inspector_ejecutor:usuarios!inspector_ejecutor_id(nombre, apellidos)')
     .order('orden_inspector', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false })
 
   if (!esAdmin) {
-    query = query.eq('inspector_id', user.id)
+    // Mostrar expedientes donde es el inspector principal O el ejecutor delegado
+    query = query.or(`inspector_id.eq.${user.id},inspector_ejecutor_id.eq.${user.id}`)
   }
 
   const { data: expedientes, error: expError } = await query

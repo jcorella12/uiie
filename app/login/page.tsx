@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { Zap, Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { Eye, EyeOff, AlertCircle } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -54,12 +54,10 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-green rounded-2xl mb-4 shadow-lg">
-            <Zap className="w-8 h-8 text-white" />
+          <div className="inline-flex items-center justify-center mb-4">
+            <img src="/logo-ciae.png" alt="CIAE — Centro de Inteligencia en Ahorro de Energía" className="h-32 w-auto object-contain" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">CIAE</h1>
-          <p className="text-sm text-gray-500 mt-1">Inteligencia en Ahorro de Energía S.A. de C.V.</p>
-          <p className="text-xs text-brand-green font-semibold mt-1 tracking-wide">UIIE-CRE-021</p>
+          <p className="text-xs text-brand-green font-semibold tracking-wide">UIIE-CRE-021</p>
         </div>
 
         {/* Card */}

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { registrarCostoIA } from '@/lib/ai/cost'
 
 const PROMPT_REVISION = `Eres un revisor experto de expedientes de inspección de sistemas fotovoltaicos para la CRE (Comisión Reguladora de Energía) en México.
 
@@ -155,9 +156,11 @@ ${docs.map((d: any, i: number) => `  ${i + 1}. [${d.tipo}] "${d.nombre}" — sub
 
   // Llamar a Claude
   let resultado: any = null
+  let costoUSD = 0
+  const MODELO = 'claude-opus-4-5'
   try {
     const msg = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
+      model: MODELO,
       max_tokens: 2048,
       messages: [{ role: 'user', content: contentParts }],
     })
@@ -165,6 +168,17 @@ ${docs.map((d: any, i: number) => `  ${i + 1}. [${d.tipo}] "${d.nombre}" — sub
     const raw = (msg.content[0] as any).text?.trim() ?? ''
     const clean = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim()
     resultado = JSON.parse(clean)
+
+    // Registrar costo
+    costoUSD = await registrarCostoIA({
+      supabase:     db,
+      usuarioId:    user.id,
+      expedienteId: expediente_id,
+      endpoint:     'expedientes/revision-ia',
+      modelo:       MODELO,
+      usage:        msg.usage,
+      detalle:      { docs_analizados: docsAdjuntados },
+    })
   } catch (e: any) {
     console.error('[revision-ia] Error:', e?.message)
     return NextResponse.json({ error: `Error en análisis IA: ${e?.message}` }, { status: 500 })
@@ -187,5 +201,5 @@ ${docs.map((d: any, i: number) => `  ${i + 1}. [${d.tipo}] "${d.nombre}" — sub
       .eq('id', envioActivo.id)
   }
 
-  return NextResponse.json({ ok: true, resultado, docsAnalizados: docsAdjuntados })
+  return NextResponse.json({ ok: true, resultado, docsAnalizados: docsAdjuntados, costo_usd: costoUSD })
 }

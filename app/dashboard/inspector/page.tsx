@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { getEffectiveInspectorId } from '@/lib/auth/effective-inspector'
 import KPICard from '@/components/dashboard/KPICard'
+import EmptyState from '@/components/ui/EmptyState'
 import { formatCurrency } from '@/lib/pricing'
 import { formatDateShort } from '@/lib/utils'
 import { FolderOpen, FileText, Calendar, Award, Clock, SearchCheck, RotateCcw, ArrowRight, AlertTriangle, Zap, Users, TrendingUp } from 'lucide-react'
@@ -165,9 +166,9 @@ export default async function DashboardInspector() {
   function ctaExpediente(e: typeof expPrioritario) {
     if (!e) return null
     if (e.status === 'devuelto')
-      return { texto: 'Devuelto con observaciones — requiere corrección', color: 'red' as const }
+      return { texto: 'Devuelto con observaciones — corrige y reenvía', color: 'amber' as const }
     if (e.status === 'rechazado')
-      return { texto: 'Revisar correcciones', color: 'red' as const }
+      return { texto: 'Rechazado — revisar motivos', color: 'red' as const }
     if (e.status === 'en_proceso' && (e.checklist_pct ?? 0) >= 100)
       return { texto: 'Enviar a revisión — checklist completo', color: 'green' as const }
     if (e.status === 'en_proceso')
@@ -197,49 +198,48 @@ export default async function DashboardInspector() {
       </div>
 
       {/* ── Panel expediente prioritario ── */}
-      {expPrioritario && cta && (
-        <div className={`mb-6 rounded-xl border-2 p-5 flex items-center justify-between gap-4 ${
-          cta.color === 'red'
-            ? 'border-red-200 bg-red-50'
-            : cta.color === 'green'
-            ? 'border-emerald-200 bg-emerald-50'
-            : 'border-orange-200 bg-orange-50'
-        }`}>
-          <div className="flex items-center gap-4 min-w-0">
-            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-              cta.color === 'red'    ? 'bg-red-100'     :
-              cta.color === 'green' ? 'bg-emerald-100'  : 'bg-orange-100'
-            }`}>
-              {cta.color === 'red'
-                ? <AlertTriangle className="w-5 h-5 text-red-600" />
-                : <Zap className="w-5 h-5 text-emerald-600" />}
+      {expPrioritario && cta && (() => {
+        // Mapeo de color → estilos. Importante: amber (devuelto = corregible) vs red (rechazado = serio)
+        const styles = {
+          red:    { border: 'border-red-200 bg-red-50',         iconBg: 'bg-red-100',    iconColor: 'text-red-600',    label: 'text-red-500',    btn: 'bg-red-600 text-white hover:bg-red-700' },
+          amber:  { border: 'border-amber-200 bg-amber-50',     iconBg: 'bg-amber-100',  iconColor: 'text-amber-600',  label: 'text-amber-600',  btn: 'bg-amber-500 text-white hover:bg-amber-600' },
+          orange: { border: 'border-orange-200 bg-orange-50',   iconBg: 'bg-orange-100', iconColor: 'text-orange-600', label: 'text-orange-500', btn: 'bg-orange-500 text-white hover:bg-orange-600' },
+          green:  { border: 'border-emerald-200 bg-emerald-50', iconBg: 'bg-emerald-100',iconColor: 'text-emerald-600',label: 'text-emerald-600',btn: 'bg-emerald-600 text-white hover:bg-emerald-700' },
+        }[cta.color]
+        const headline = {
+          red:    'Requiere correcciones',
+          amber:  'Devuelto con observaciones',
+          orange: 'Siguiente expediente a trabajar',
+          green:  'Siguiente expediente a trabajar',
+        }[cta.color]
+
+        return (
+          <div className={`mb-6 rounded-xl border-2 p-5 flex items-center justify-between gap-4 ${styles.border}`}>
+            <div className="flex items-center gap-4 min-w-0">
+              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${styles.iconBg}`}>
+                {(cta.color === 'red' || cta.color === 'amber')
+                  ? <AlertTriangle className={`w-5 h-5 ${styles.iconColor}`} />
+                  : <Zap className={`w-5 h-5 ${styles.iconColor}`} />}
+              </div>
+              <div className="min-w-0">
+                <p className={`text-xs font-semibold uppercase tracking-wider mb-0.5 ${styles.label}`}>
+                  {headline}
+                </p>
+                <p className="font-bold text-gray-900 text-base truncate">
+                  {(expPrioritario.cliente as any)?.nombre ?? '—'}
+                </p>
+                <p className="text-xs text-gray-500 font-mono">{expPrioritario.numero_folio} · {cta.texto}</p>
+              </div>
             </div>
-            <div className="min-w-0">
-              <p className={`text-xs font-semibold uppercase tracking-wider mb-0.5 ${
-                cta.color === 'red' ? 'text-red-500' : cta.color === 'green' ? 'text-emerald-600' : 'text-orange-500'
-              }`}>
-                {expPrioritario?.status === 'devuelto' ? 'Devuelto con observaciones' : cta.color === 'red' ? 'Requiere correcciones' : 'Siguiente expediente a trabajar'}
-              </p>
-              <p className="font-bold text-gray-900 text-base truncate">
-                {(expPrioritario.cliente as any)?.nombre ?? '—'}
-              </p>
-              <p className="text-xs text-gray-500 font-mono">{expPrioritario.numero_folio} · {cta.texto}</p>
-            </div>
+            <Link
+              href={`/dashboard/inspector/expedientes/${expPrioritario.id}`}
+              className={`shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${styles.btn}`}
+            >
+              Abrir <ArrowRight className="w-4 h-4" />
+            </Link>
           </div>
-          <Link
-            href={`/dashboard/inspector/expedientes/${expPrioritario.id}`}
-            className={`shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              cta.color === 'red'
-                ? 'bg-red-600 text-white hover:bg-red-700'
-                : cta.color === 'green'
-                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                : 'bg-orange-500 text-white hover:bg-orange-600'
-            }`}
-          >
-            Abrir <ArrowRight className="w-4 h-4" />
-          </Link>
-        </div>
-      )}
+        )
+      })()}
 
       {/* ── Panel global del año — solo inspector_responsable ── */}
       {esResponsable && globalData && (
@@ -249,14 +249,14 @@ export default async function DashboardInspector() {
             Resumen {anioActual} — Toda la organización
           </h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-4 mb-5">
-            <KPICard title="Expedientes" value={globalData.totalExpedientes} subtitle={`Creados en ${anioActual}`} icon={FolderOpen} color="green" />
-            <KPICard title="Folios Emitidos" value={globalData.totalFolios} subtitle={`Registrados en ${anioActual}`} icon={Award} color="purple" />
-            <KPICard title="Aprobados" value={globalData.totalAprobados} subtitle="Certificados emitidos" icon={SearchCheck} color="blue" />
+            <KPICard title="Expedientes" value={globalData.totalExpedientes} subtitle={`Creados en ${anioActual}`} icon={FolderOpen} color="green" href="/dashboard/inspector/expedientes" />
+            <KPICard title="Folios Emitidos" value={globalData.totalFolios} subtitle={`Registrados en ${anioActual}`} icon={Award} color="purple" href="/dashboard/admin/folios" />
+            <KPICard title="Aprobados" value={globalData.totalAprobados} subtitle="Certificados emitidos" icon={SearchCheck} color="blue" href="/dashboard/inspector/certificados" />
             <KPICard title="kWp Inspeccionados" value={`${globalData.kwpTotal.toLocaleString('es-MX')} kWp`} subtitle="Potencia total del año" icon={Zap} color="amber" />
-            <KPICard title="En Revisión" value={globalData.totalEnRevision} subtitle="Pendientes de certificado" icon={Clock} color="orange" />
-            <KPICard title="Con Observaciones" value={globalData.totalDevueltos} subtitle="Devueltos o rechazados" icon={RotateCcw} color={globalData.totalDevueltos > 0 ? 'red' : 'green'} />
-            <KPICard title="Inspecciones Realizadas" value={globalData.inspeccionesRealizadasAnio} subtitle={`Completadas en ${anioActual}`} icon={Calendar} color="green" />
-            <KPICard title="Inspectores Activos" value={globalData.totalInspectores} subtitle="En el equipo" icon={Users} color="blue" />
+            <KPICard title="En Revisión" value={globalData.totalEnRevision} subtitle="Pendientes de certificado" icon={Clock} color="orange" href="/dashboard/inspector/expedientes?filter=revision" />
+            <KPICard title="Con Observaciones" value={globalData.totalDevueltos} subtitle="Devueltos o rechazados" icon={RotateCcw} color={globalData.totalDevueltos > 0 ? 'amber' : 'green'} href="/dashboard/inspector/expedientes?filter=devuelto" />
+            <KPICard title="Inspecciones Realizadas" value={globalData.inspeccionesRealizadasAnio} subtitle={`Completadas en ${anioActual}`} icon={Calendar} color="green" href="/dashboard/inspector/agenda" />
+            <KPICard title="Inspectores Activos" value={globalData.totalInspectores} subtitle="En el equipo" icon={Users} color="blue" href="/dashboard/inspectores" />
           </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-6">
@@ -325,24 +325,26 @@ export default async function DashboardInspector() {
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 mb-8">
-        <KPICard title={esResponsable ? 'Mis Expedientes' : 'Mis Expedientes'} value={misExpedientes ?? 0} subtitle="Total registrados" icon={FolderOpen} color="green" />
-        <KPICard title="Solicitudes Pendientes" value={misSolicitudesPendientes ?? 0} subtitle="En espera de folio" icon={Clock} color="orange" />
-        <KPICard title="Folios Asignados" value={misFoliosAsignados ?? 0} subtitle="Total histórico" icon={Award} color="purple" />
+        <KPICard title="Mis Expedientes" value={misExpedientes ?? 0} subtitle="Total registrados" icon={FolderOpen} color="green" href="/dashboard/inspector/expedientes" />
+        <KPICard title="Solicitudes Pendientes" value={misSolicitudesPendientes ?? 0} subtitle="En espera de folio" icon={Clock} color="orange" href="/dashboard/inspector/solicitudes" />
+        <KPICard title="Folios Asignados" value={misFoliosAsignados ?? 0} subtitle="Total histórico" icon={Award} color="purple" href="/dashboard/inspector/expedientes" />
         <KPICard
           title="En Revisión CIAE"
           value={enRevisionCIAE ?? 0}
           subtitle="Pendientes de emitirse · sin error registrado"
           icon={SearchCheck}
           color="blue"
+          href="/dashboard/inspector/expedientes?filter=revision"
         />
         <KPICard
           title="Devueltas"
           value={devueltas ?? 0}
           subtitle="Regresadas con observaciones"
           icon={RotateCcw}
-          color={devueltas ? 'red' : 'green'}
+          color={devueltas ? 'amber' : 'green'}
+          href="/dashboard/inspector/expedientes?filter=devuelto"
         />
-        <KPICard title="Inspecciones esta Semana" value={misInspeccionesSemana ?? 0} subtitle="Programadas próximos 7 días" icon={Calendar} color="amber" />
+        <KPICard title="Inspecciones esta Semana" value={misInspeccionesSemana ?? 0} subtitle="Programadas próximos 7 días" icon={Calendar} color="amber" href="/dashboard/inspector/agenda" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
@@ -353,10 +355,14 @@ export default async function DashboardInspector() {
             <a href="/dashboard/inspector/solicitudes" className="text-sm text-brand-green hover:underline font-medium">Ver todas →</a>
           </div>
           {!solicitudesRecientes?.length ? (
-            <div className="text-center py-8 text-gray-400">
-              <FileText className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              <p className="text-sm">Sin solicitudes aún. <a href="/dashboard/inspector/solicitudes/nueva" className="text-brand-green hover:underline">Crear una</a></p>
-            </div>
+            <EmptyState
+              icon={FileText}
+              title="Sin solicitudes aún"
+              description="Crea una nueva solicitud de inspección para comenzar"
+              action={{ label: 'Nueva solicitud', href: '/dashboard/inspector/solicitudes/nueva' }}
+              actionIcon={FileText}
+              variant="compact"
+            />
           ) : (
             <div className="space-y-2">
               {solicitudesRecientes.map((s) => (
@@ -388,10 +394,13 @@ export default async function DashboardInspector() {
             <a href="/dashboard/inspector/agenda" className="text-sm text-brand-green hover:underline font-medium">Ver agenda →</a>
           </div>
           {!proximasInspecciones?.length ? (
-            <div className="text-center py-8 text-gray-400">
-              <Calendar className="w-8 h-8 mx-auto mb-2 opacity-40" />
-              <p className="text-sm">No hay inspecciones programadas.</p>
-            </div>
+            <EmptyState
+              icon={Calendar}
+              title="Sin inspecciones próximas"
+              description="Programa visitas desde un expediente"
+              action={{ label: 'Ir a expedientes', href: '/dashboard/inspector/expedientes' }}
+              variant="compact"
+            />
           ) : (
             <div className="space-y-2">
               {proximasInspecciones.map((i) => {

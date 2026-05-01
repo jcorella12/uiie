@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { registrarCostoIA } from '@/lib/ai/cost'
 
 const anthropic = new Anthropic()
 
@@ -105,8 +106,9 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Paso 1: Extracción con IA ──────────────────────────────────────────────
+    const MODELO = 'claude-opus-4-5'
     const message = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
+      model: MODELO,
       max_tokens: 4096,
       messages: [
         {
@@ -114,6 +116,18 @@ export async function POST(req: NextRequest) {
           content: `${PROMPT_CSV}\n\n---CONTENIDO DEL ARCHIVO---\n${contenidoTexto.slice(0, 12000)}`,
         },
       ],
+    })
+
+    // Registrar costo
+    const dbAdmin = await createServiceClient()
+    const { data: { user: usrCost } } = await supabase.auth.getUser()
+    await registrarCostoIA({
+      supabase:     dbAdmin,
+      usuarioId:    usrCost?.id ?? null,
+      expedienteId: null,
+      endpoint:     'testigos/importar',
+      modelo:       MODELO,
+      usage:        message.usage,
     })
 
     const raw = (message.content[0] as any)?.text ?? ''

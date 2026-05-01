@@ -1,6 +1,7 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { registrarCostoIA } from '@/lib/ai/cost'
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -260,6 +261,8 @@ Responde ÚNICAMENTE con el JSON válido, sin texto adicional.`
   }
 
   let analysis: any = null
+  let costoUSD = 0
+  const MODELO = 'claude-opus-4-5'
   try {
     // Infer mime_type from storage_path extension as fallback for documents
     // uploaded via the client portal before mime_type was saved (legacy records).
@@ -278,7 +281,7 @@ Responde ÚNICAMENTE con el JSON válido, sin texto adicional.`
     let message
     if (isPdf || isImage) {
       message = await anthropic.messages.create({
-        model: 'claude-opus-4-5',
+        model: MODELO,
         max_tokens: 1024,
         messages: [{
           role: 'user',
@@ -293,7 +296,7 @@ Responde ÚNICAMENTE con el JSON válido, sin texto adicional.`
       })
     } else {
       message = await anthropic.messages.create({
-        model: 'claude-opus-4-5',
+        model: MODELO,
         max_tokens: 512,
         messages: [{
           role: 'user',
@@ -308,6 +311,18 @@ Responde ÚNICAMENTE con el JSON válido, sin texto adicional.`
       const raw = content.text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '')
       analysis = JSON.parse(raw)
     }
+
+    // Registrar costo (usar service client para asegurar el INSERT)
+    const dbAdmin = await createServiceClient()
+    costoUSD = await registrarCostoIA({
+      supabase:     dbAdmin,
+      usuarioId:    user.id,
+      expedienteId: doc.expediente_id,
+      endpoint:     'documentos/analizar',
+      modelo:       MODELO,
+      usage:        message.usage,
+      detalle:      { tipo_documento: doc.tipo },
+    })
   } catch (err: any) {
     console.error('[analizar] error:', err?.message)
     analysis = { error: 'No se pudo analizar el documento', resumen: 'Error en análisis IA: ' + (err?.message ?? '') }
@@ -319,5 +334,5 @@ Responde ÚNICAMENTE con el JSON válido, sin texto adicional.`
     .update({ analisis_ia: analysis, analizado_en: new Date().toISOString() })
     .eq('id', documento_id)
 
-  return NextResponse.json({ analysis })
+  return NextResponse.json({ analysis, costo_usd: costoUSD })
 }

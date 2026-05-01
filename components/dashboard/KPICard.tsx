@@ -1,5 +1,6 @@
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { LucideIcon } from 'lucide-react'
+import { ArrowUpRight, LucideIcon } from 'lucide-react'
 
 interface KPICardProps {
   title: string
@@ -8,6 +9,8 @@ interface KPICardProps {
   icon: LucideIcon
   color?: 'green' | 'orange' | 'blue' | 'purple' | 'red' | 'amber'
   trend?: { value: number; label: string }
+  /** Si se pasa, la card se vuelve un link clickable a esa ruta */
+  href?: string
 }
 
 const COLOR_MAP = {
@@ -29,15 +32,20 @@ const ICON_BG = {
 }
 
 export default function KPICard({
-  title, value, subtitle, icon: Icon, color = 'green', trend,
+  title, value, subtitle, icon: Icon, color = 'green', trend, href,
 }: KPICardProps) {
-  return (
-    <div className={cn('rounded-xl border p-6 flex items-start gap-4', COLOR_MAP[color])}>
+  const content = (
+    <>
       <div className={cn('w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0', ICON_BG[color])}>
         <Icon className="w-6 h-6 text-white" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium opacity-80 truncate">{title}</p>
+        <div className="flex items-center gap-1">
+          <p className="text-sm font-medium opacity-80 truncate">{title}</p>
+          {href && (
+            <ArrowUpRight className="w-3.5 h-3.5 opacity-0 group-hover:opacity-70 transition-opacity flex-shrink-0" />
+          )}
+        </div>
         <p className="text-3xl font-bold mt-0.5">{value}</p>
         {subtitle && <p className="text-xs opacity-70 mt-0.5">{subtitle}</p>}
         {trend && (
@@ -46,6 +54,24 @@ export default function KPICard({
           </p>
         )}
       </div>
-    </div>
+    </>
   )
+
+  const baseCls = cn(
+    'rounded-xl border p-6 flex items-start gap-4 transition-all',
+    COLOR_MAP[color],
+  )
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className={cn(baseCls, 'group hover:shadow-md hover:scale-[1.02] cursor-pointer')}
+      >
+        {content}
+      </Link>
+    )
+  }
+
+  return <div className={baseCls}>{content}</div>
 }

@@ -492,35 +492,48 @@ function calcularProgreso(exp: any): { porcentaje: number; camposFilled: number;
 const PASOS = ['Folio', 'Programado', 'Inspeccionado', 'En Revisión', 'Cerrado']
 
 function MiniStepper({ pasoActual }: { pasoActual: number }) {
+  // Etiqueta del paso actual para mostrar arriba (en móvil reemplaza los labels individuales)
+  const labelActual = PASOS[Math.min(pasoActual - 1, PASOS.length - 1)] ?? PASOS[0]
+
   return (
-    <div className="flex items-center gap-0">
-      {PASOS.map((label, i) => {
-        const n = i + 1
-        const done = n < pasoActual
-        const active = n === pasoActual
-        return (
-          <div key={n} className="flex items-center flex-1 min-w-0">
-            <div className="flex flex-col items-center flex-shrink-0">
-              <div className={[
-                'w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-colors',
-                done    ? 'bg-brand-green text-white'
-                : active ? 'bg-brand-orange text-white ring-2 ring-brand-orange/30'
-                : 'bg-gray-100 text-gray-400',
-              ].join(' ')}>
-                {done ? '✓' : n}
+    <div className="space-y-2">
+      {/* Móvil: solo muestra "Paso X de Y · Nombre" */}
+      <div className="sm:hidden text-xs text-gray-500 font-medium">
+        Paso {Math.min(pasoActual, PASOS.length)} de {PASOS.length} · <span className="text-brand-orange">{labelActual}</span>
+      </div>
+
+      <div className="flex items-center gap-0">
+        {PASOS.map((label, i) => {
+          const n = i + 1
+          const done = n < pasoActual
+          const active = n === pasoActual
+          return (
+            <div key={n} className="flex items-center flex-1 min-w-0">
+              <div className="flex flex-col items-center flex-shrink-0">
+                <div className={[
+                  'rounded-full flex items-center justify-center font-bold transition-colors',
+                  // En móvil más pequeño, en desktop más grande
+                  'w-5 h-5 text-[10px] sm:w-6 sm:h-6 sm:text-xs',
+                  done    ? 'bg-brand-green text-white'
+                  : active ? 'bg-brand-orange text-white ring-2 ring-brand-orange/30'
+                  : 'bg-gray-100 text-gray-400',
+                ].join(' ')}>
+                  {done ? '✓' : n}
+                </div>
+                {/* Labels solo desde sm hacia arriba */}
+                <span className={`hidden sm:inline-block text-[10px] mt-1 whitespace-nowrap font-medium ${
+                  done ? 'text-brand-green' : active ? 'text-brand-orange' : 'text-gray-400'
+                }`}>
+                  {label}
+                </span>
               </div>
-              <span className={`text-[9px] mt-0.5 whitespace-nowrap font-medium ${
-                done ? 'text-brand-green' : active ? 'text-brand-orange' : 'text-gray-400'
-              }`}>
-                {label}
-              </span>
+              {i < PASOS.length - 1 && (
+                <div className={`flex-1 h-0.5 mx-1 rounded ${done ? 'bg-brand-green' : 'bg-gray-200'}`} />
+              )}
             </div>
-            {i < PASOS.length - 1 && (
-              <div className={`flex-1 h-0.5 mx-1 rounded ${done ? 'bg-brand-green' : 'bg-gray-200'}`} />
-            )}
-          </div>
-        )
-      })}
+          )
+        })}
+      </div>
     </div>
   )
 }

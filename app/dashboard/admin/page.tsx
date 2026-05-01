@@ -66,10 +66,12 @@ export default async function AdminDashboard() {
         </div>
 
         {!cola?.length ? (
-          <div className="text-center py-12 text-gray-400">
-            <CheckCircle className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p className="font-medium">¡Cola vacía!</p>
-            <p className="text-sm mt-1">No hay solicitudes pendientes de asignación.</p>
+          <div className="text-center py-12">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mx-auto mb-3">
+              <CheckCircle className="w-8 h-8 text-emerald-600" />
+            </div>
+            <p className="font-semibold text-gray-700 mb-1">¡Cola vacía!</p>
+            <p className="text-sm text-gray-400">No hay solicitudes pendientes de asignación de folio</p>
           </div>
         ) : (
           <div className="overflow-x-auto">

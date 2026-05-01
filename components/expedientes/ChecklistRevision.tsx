@@ -57,14 +57,23 @@ function computeAutoStates(
   const m = new Map<number, boolean>()
   // 1. Resolutivo con folio y fecha
   m.set(1, !!(exp.resolutivo_folio && exp.resolutivo_fecha))
-  // 2. Número de medidor + resolutivo recibido
-  m.set(2, !!(exp.numero_medidor && exp.resolutivo_folio))
+  // 2. Número de medidor capturado en el expediente
+  // (el resolutivo CFE no incluye el medidor — solo se valida que el medidor exista)
+  m.set(2, !!exp.numero_medidor)
   // 3. Dictamen UVIE con folio y documento subido
   m.set(3, !!(exp.dictamen_folio_dvnp && docTipos.includes('dictamen')))
-  // 4. Comprobante pago: solo aplica si resolutivo existe y tiene cobro
+  // 4. Comprobante pago: si el resolutivo tiene cobro, requiere
+  //    monto + referencia + el documento `ficha_pago` subido.
   m.set(4,
     !!(exp.resolutivo_folio) &&
-    (!exp.resolutivo_tiene_cobro || !!(exp.resolutivo_monto && exp.resolutivo_referencia))
+    (
+      !exp.resolutivo_tiene_cobro ||
+      !!(
+        exp.resolutivo_monto &&
+        exp.resolutivo_referencia &&
+        docTipos.includes('ficha_pago')
+      )
+    )
   )
   // 5. kWp coincide: ambos datos presentes
   m.set(5, !!(exp.kwp && exp.resolutivo_folio))

@@ -60,7 +60,8 @@ export async function updateSession(request: NextRequest) {
       pathname.startsWith('/dashboard/admin') ||
       pathname.startsWith('/dashboard/conciliacion') ||
       pathname.startsWith('/dashboard/reporte-trimestral') ||
-      pathname.startsWith('/dashboard/inspectores')
+      pathname.startsWith('/dashboard/inspectores') ||
+      pathname.startsWith('/dashboard/ai-costos')
     )) {
       url.pathname = rol === 'cliente' ? '/dashboard/cliente' : '/dashboard/inspector'
       return NextResponse.redirect(url)

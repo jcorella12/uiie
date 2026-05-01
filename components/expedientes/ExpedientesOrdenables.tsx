@@ -1,12 +1,14 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import {
   FolderOpen, ChevronUp, ChevronDown, GripVertical,
   CheckCircle2, Loader2, UserCog, Search, X, BellRing,
+  LayoutGrid, Rows3,
 } from 'lucide-react'
 import { formatDateShort } from '@/lib/utils'
+import BotonZipCompacto from './BotonZipCompacto'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface ExpedienteRow {
@@ -21,9 +23,14 @@ export interface ExpedienteRow {
   checklist_pct?: number | null
   nombre_cliente_final?: string | null
   cli_completado_at?: string | null
+  respaldo_descargado_at?: string | null
+  respaldo_archivado_at?: string | null
+  respaldo_borrado_at?: string | null
   cliente: { nombre: string } | null
   inspector: { nombre: string } | null
   inspector_id: string | null
+  inspector_ejecutor_id?: string | null
+  inspector_ejecutor?: { nombre: string; apellidos?: string | null } | null
 }
 
 export interface InspectorOption {
@@ -154,9 +161,11 @@ function sortedByOrden(rows: ExpedienteRow[]) {
 // ─── Drag-and-drop list (inspector view) ──────────────────────────────────────
 function DraggableList({
   rows,
+  userId,
   onReorder,
 }: {
   rows: ExpedienteRow[]
+  userId: string
   onReorder: (ids: string[]) => void
 }) {
   const [busqueda, setBusqueda] = useState('')
@@ -164,6 +173,17 @@ function DraggableList({
   const [saving,  setSaving]  = useState(false)
   const [saved,   setSaved]   = useState(false)
   const [dirty,   setDirty]   = useState(false)
+  // Modo de vista: 'cards' o 'table' — se persiste en localStorage
+  const [vista, setVista] = useState<'cards' | 'table'>('cards')
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const saved = localStorage.getItem('expedientes-vista') as 'cards' | 'table' | null
+    if (saved === 'cards' || saved === 'table') setVista(saved)
+  }, [])
+  function cambiarVista(v: 'cards' | 'table') {
+    setVista(v)
+    if (typeof window !== 'undefined') localStorage.setItem('expedientes-vista', v)
+  }
   const dragIdx = useRef<number | null>(null)
   const dragOverIdx = useRef<number | null>(null)
 
@@ -220,8 +240,38 @@ function DraggableList({
 
   return (
     <div className="space-y-3">
-      {/* Search */}
-      <SearchInput value={busqueda} onChange={setBusqueda} />
+      {/* Search + toggle de vista */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1">
+          <SearchInput value={busqueda} onChange={setBusqueda} />
+        </div>
+        <div className="flex border border-gray-200 rounded-lg overflow-hidden flex-shrink-0" role="group" aria-label="Modo de vista">
+          <button
+            type="button"
+            onClick={() => cambiarVista('cards')}
+            title="Vista de tarjetas"
+            className={`px-2.5 py-2 transition-colors ${
+              vista === 'cards'
+                ? 'bg-brand-green text-white'
+                : 'bg-white text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => cambiarVista('table')}
+            title="Vista compacta de tabla"
+            className={`px-2.5 py-2 transition-colors border-l border-gray-200 ${
+              vista === 'table'
+                ? 'bg-brand-green text-white'
+                : 'bg-white text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            <Rows3 className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
 
       {/* Save bar */}
       {(dirty || saved) && (
@@ -249,143 +299,351 @@ function DraggableList({
         Arrastra las filas o usa las flechas para cambiar el orden de trabajo
       </p>
 
-      <div className="border border-gray-200 rounded-xl overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-gray-100 bg-gray-50/60">
-              <th className="w-8 py-3 px-2"></th>
-              <th className="w-14 py-3 px-2 text-center font-medium text-gray-400 text-xs">#</th>
-              <th className="text-left py-3 px-3 font-medium text-gray-500">Folio</th>
-              <th className="text-left py-3 px-3 font-medium text-gray-500 hidden sm:table-cell">Cliente Final</th>
-              <th className="text-left py-3 px-3 font-medium text-gray-500 hidden sm:table-cell">Nombre</th>
-              <th className="text-right py-3 px-3 font-medium text-gray-500 hidden md:table-cell">kWp</th>
-              <th className="text-left py-3 px-3 font-medium text-gray-500 hidden lg:table-cell">Ciudad</th>
-              <th className="text-center py-3 px-3 font-medium text-gray-500">Estado</th>
-              <th className="text-left py-3 px-3 font-medium text-gray-500 hidden lg:table-cell">Siguiente paso</th>
-              <th className="text-right py-3 px-3 font-medium text-gray-500 hidden md:table-cell">Inicio</th>
-              <th className="py-3 px-2 w-8"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {visibleItems.length === 0 && (
-              <tr>
-                <td colSpan={10} className="py-10 text-center text-sm text-gray-400">
-                  Sin resultados para &ldquo;{busqueda}&rdquo;
-                </td>
+      {/* Estado vacío */}
+      {visibleItems.length === 0 && (
+        <div className="text-center py-10 text-sm text-gray-400 border border-dashed border-gray-200 rounded-xl">
+          Sin resultados para &ldquo;{busqueda}&rdquo;
+        </div>
+      )}
+
+      {/* ── Vista de tabla (compacta) ── */}
+      {vista === 'table' && visibleItems.length > 0 && (
+        <div className="border border-gray-200 rounded-xl overflow-hidden overflow-x-auto">
+          <table className="w-full text-sm min-w-[720px]">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50/60">
+                <th className="w-8 py-3 px-2"></th>
+                <th className="w-14 py-3 px-2 text-center font-medium text-gray-400 text-xs">#</th>
+                <th className="text-left py-3 px-3 font-medium text-gray-500">Folio</th>
+                <th className="text-left py-3 px-3 font-medium text-gray-500">Cliente Final</th>
+                <th className="text-right py-3 px-3 font-medium text-gray-500">kWp</th>
+                <th className="text-left py-3 px-3 font-medium text-gray-500 hidden lg:table-cell">Ciudad</th>
+                <th className="text-center py-3 px-3 font-medium text-gray-500">Estado</th>
+                <th className="text-center py-3 px-3 font-medium text-gray-500 hidden md:table-cell">Avance</th>
+                <th className="py-3 px-2 w-32"></th>
               </tr>
-            )}
-            {visibleItems.map((exp, i) => {
-              const cliente = exp.cliente as any
-              const sp = siguientePaso(exp.status, exp.checklist_pct)
-              const grupo = STATUS_GROUP[exp.status] ?? 9
-              const grupoAnterior = i > 0 ? (STATUS_GROUP[visibleItems[i - 1].status] ?? 9) : grupo
-              const esNuevoGrupo = !busqueda && (i === 0 || grupo !== grupoAnterior)
-              const GRUPO_LABEL: Record<number, string> = {
-                1: 'Abiertos',
-                2: 'En revisión CIAE',
-                3: 'Emitidos / Cerrados',
-              }
-              return (
-                <>
-                  {esNuevoGrupo && (
-                    <tr key={`sep-${i}`} className="border-b border-gray-100">
-                      <td colSpan={11} className="py-1.5 px-4 bg-gray-50 text-xs font-semibold text-gray-400 uppercase tracking-wider">
-                        {GRUPO_LABEL[grupo] ?? ''}
+            </thead>
+            <tbody>
+              {visibleItems.map((exp, i) => {
+                const cliente = exp.cliente as any
+                const grupo = STATUS_GROUP[exp.status] ?? 9
+                const grupoAnterior = i > 0 ? (STATUS_GROUP[visibleItems[i - 1].status] ?? 9) : grupo
+                const esNuevoGrupo = !busqueda && (i === 0 || grupo !== grupoAnterior)
+                const GRUPO_LABEL: Record<number, string> = { 1: 'Abiertos', 2: 'En revisión CIAE', 3: 'Emitidos / Cerrados' }
+                const esDelegueYo = exp.inspector_ejecutor_id && exp.inspector_id === userId
+                const meDelegaron = exp.inspector_ejecutor_id === userId && exp.inspector_id !== userId
+                return (
+                  <>
+                    {esNuevoGrupo && (
+                      <tr key={`sep-${i}`} className="border-b border-gray-100">
+                        <td colSpan={9} className="py-1.5 px-4 bg-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                          {GRUPO_LABEL[grupo] ?? ''}
+                        </td>
+                      </tr>
+                    )}
+                    <tr
+                      key={exp.id}
+                      draggable
+                      onDragStart={() => onDragStart(i)}
+                      onDragEnter={() => onDragEnter(i)}
+                      onDragOver={onDragOver}
+                      onDrop={onDrop}
+                      className={`border-b transition-colors cursor-grab active:cursor-grabbing group ${
+                        exp.status === 'devuelto'
+                          ? 'border-orange-200 bg-orange-50/60 hover:bg-orange-50 border-l-4 border-l-orange-400'
+                          : 'border-gray-50 hover:bg-gray-50'
+                      }`}
+                    >
+                      <td className="py-2.5 px-2 text-center">
+                        <GripVertical className="w-4 h-4 text-gray-300 group-hover:text-gray-400 mx-auto" />
+                      </td>
+                      <td className="py-2.5 px-2 text-center">
+                        <div className="flex flex-col items-center gap-0.5">
+                          <button type="button" onClick={() => move(i, -1)} disabled={i === 0}
+                            className="p-0.5 rounded text-gray-300 hover:text-gray-600 disabled:opacity-20">
+                            <ChevronUp className="w-3 h-3" />
+                          </button>
+                          <span className="text-xs font-bold text-gray-400 w-5 text-center tabular-nums">{i + 1}</span>
+                          <button type="button" onClick={() => move(i, 1)} disabled={i === items.length - 1}
+                            className="p-0.5 rounded text-gray-300 hover:text-gray-600 disabled:opacity-20">
+                            <ChevronDown className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Link href={`/dashboard/inspector/expedientes/${exp.id}`}
+                            className="font-mono text-brand-green font-semibold text-xs hover:underline">
+                            {exp.numero_folio}
+                          </Link>
+                          {exp.cli_completado_at && ['borrador', 'en_proceso'].includes(exp.status) && (
+                            <span title="Cliente listo" className="inline-flex items-center text-amber-700 bg-amber-100 border border-amber-200 rounded-full p-0.5">
+                              <BellRing className="w-2.5 h-2.5" />
+                            </span>
+                          )}
+                          {esDelegueYo && (
+                            <span title="Delegaste la visita" className="inline-flex items-center text-blue-700 bg-blue-100 border border-blue-200 rounded-full p-0.5">
+                              <UserCog className="w-2.5 h-2.5" />
+                            </span>
+                          )}
+                          {meDelegaron && (
+                            <span title="Te delegaron esta visita" className="inline-flex items-center text-purple-700 bg-purple-100 border border-purple-200 rounded-full p-0.5">
+                              <UserCog className="w-2.5 h-2.5" />
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-2.5 px-3 text-gray-800 max-w-[260px] truncate">
+                        <p className="font-medium truncate">{exp.nombre_cliente_final ?? cliente?.nombre ?? '—'}</p>
+                        {cliente?.nombre && exp.nombre_cliente_final && cliente.nombre !== exp.nombre_cliente_final && (
+                          <p className="text-[10px] text-gray-400 truncate">{cliente.nombre}</p>
+                        )}
+                      </td>
+                      <td className="py-2.5 px-3 text-right text-gray-700 tabular-nums">{exp.kwp ?? '—'}</td>
+                      <td className="py-2.5 px-3 text-gray-600 hidden lg:table-cell">{exp.ciudad ?? '—'}</td>
+                      <td className="py-2.5 px-3 text-center">
+                        <span className={STATUS_BADGE[exp.status] ?? STATUS_BADGE.borrador}>
+                          {STATUS_LABEL[exp.status] ?? exp.status}
+                        </span>
+                      </td>
+                      <td className="py-2.5 px-3 hidden md:table-cell">
+                        {exp.checklist_pct != null && grupo !== 3 ? (
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden min-w-[60px]">
+                              <div
+                                className={`h-full rounded-full ${
+                                  (exp.checklist_pct ?? 0) >= 100 ? 'bg-emerald-500' :
+                                  (exp.checklist_pct ?? 0) >= 70 ? 'bg-orange-400' : 'bg-gray-300'
+                                }`}
+                                style={{ width: `${Math.max(exp.checklist_pct ?? 0, 4)}%` }}
+                              />
+                            </div>
+                            <span className="text-[10px] font-bold tabular-nums text-gray-500 w-7 text-right">
+                              {exp.checklist_pct ?? 0}%
+                            </span>
+                          </div>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      <td className="py-2.5 px-2 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <BotonZipCompacto
+                            expedienteId={exp.id}
+                            numeroFolio={exp.numero_folio}
+                            status={exp.status}
+                            respaldoDescargadoAt={exp.respaldo_descargado_at ?? null}
+                            respaldoArchivadoAt={exp.respaldo_archivado_at ?? null}
+                            respaldoBorradoAt={exp.respaldo_borrado_at ?? null}
+                          />
+                          <Link href={`/dashboard/inspector/expedientes/${exp.id}`}
+                            className="text-xs text-brand-green hover:underline font-medium">
+                            Ver →
+                          </Link>
+                        </div>
                       </td>
                     </tr>
-                  )}
-                <tr
-                  key={exp.id}
-                  draggable
-                  onDragStart={() => onDragStart(i)}
-                  onDragEnter={() => onDragEnter(i)}
-                  onDragOver={onDragOver}
-                  onDrop={onDrop}
-                  className={`border-b transition-colors cursor-grab active:cursor-grabbing group ${
-                    exp.status === 'devuelto'
-                      ? 'border-orange-200 bg-orange-50/60 hover:bg-orange-50 border-l-4 border-l-orange-400'
-                      : 'border-gray-50 hover:bg-gray-50'
-                  }`}
-                >
-                  {/* Grip */}
-                  <td className="py-3 px-2 text-center">
-                    <GripVertical className="w-4 h-4 text-gray-300 group-hover:text-gray-400 mx-auto" />
-                  </td>
+                  </>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-                  {/* Priority number */}
-                  <td className="py-3 px-2 text-center">
-                    <div className="flex flex-col items-center gap-0.5">
-                      <button
-                        type="button"
-                        onClick={() => move(i, -1)}
-                        disabled={i === 0}
-                        className="p-0.5 rounded text-gray-300 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-20 transition-colors"
-                      >
-                        <ChevronUp className="w-3 h-3" />
-                      </button>
-                      <span className="text-xs font-bold text-gray-400 w-5 text-center">{i + 1}</span>
-                      <button
-                        type="button"
-                        onClick={() => move(i, 1)}
-                        disabled={i === items.length - 1}
-                        className="p-0.5 rounded text-gray-300 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-20 transition-colors"
-                      >
-                        <ChevronDown className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </td>
+      {/* ── Vista de tarjetas ── */}
+      {vista === 'cards' && visibleItems.length > 0 && (
+      <div className="space-y-3">
+        {visibleItems.map((exp, i) => {
+          const cliente = exp.cliente as any
+          const sp = siguientePaso(exp.status, exp.checklist_pct)
+          const grupo = STATUS_GROUP[exp.status] ?? 9
+          const grupoAnterior = i > 0 ? (STATUS_GROUP[visibleItems[i - 1].status] ?? 9) : grupo
+          const esNuevoGrupo = !busqueda && (i === 0 || grupo !== grupoAnterior)
+          const GRUPO_LABEL: Record<number, string> = {
+            1: 'Abiertos',
+            2: 'En revisión CIAE',
+            3: 'Emitidos / Cerrados',
+          }
+          const esDevuelto = exp.status === 'devuelto'
+          const esDelegueYo = exp.inspector_ejecutor_id && exp.inspector_id === userId
+          const meDelegaron = exp.inspector_ejecutor_id === userId && exp.inspector_id !== userId
+          const ejecutorNombre = exp.inspector_ejecutor
+            ? `${exp.inspector_ejecutor.nombre} ${exp.inspector_ejecutor.apellidos ?? ''}`.trim()
+            : ''
 
-                  <td className="py-3 px-3">
-                    <div className="flex items-center gap-1.5">
+          return (
+            <div key={exp.id}>
+              {/* Separador de grupo */}
+              {esNuevoGrupo && (
+                <div className="flex items-center gap-2 mt-5 mb-2 first:mt-0">
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                    {GRUPO_LABEL[grupo] ?? ''}
+                  </span>
+                  <div className="flex-1 h-px bg-gray-100" />
+                </div>
+              )}
+
+              <div
+                draggable
+                onDragStart={() => onDragStart(i)}
+                onDragEnter={() => onDragEnter(i)}
+                onDragOver={onDragOver}
+                onDrop={onDrop}
+                className={`group relative rounded-xl border bg-white transition-all cursor-grab active:cursor-grabbing hover:shadow-md ${
+                  esDevuelto
+                    ? 'border-orange-300 bg-orange-50/40 border-l-4 border-l-orange-500'
+                    : 'border-gray-200 hover:border-brand-green/40'
+                }`}
+              >
+                <div className="flex items-stretch gap-3">
+                  {/* Columna izquierda: drag + número de prioridad */}
+                  <div className="flex flex-col items-center justify-center gap-1 px-2 py-3 border-r border-gray-100 bg-gray-50/50 rounded-l-xl">
+                    <GripVertical className="w-4 h-4 text-gray-300 group-hover:text-gray-500" />
+                    <button
+                      type="button"
+                      onClick={() => move(i, -1)}
+                      disabled={i === 0}
+                      className="p-0.5 rounded text-gray-300 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-20"
+                    >
+                      <ChevronUp className="w-3 h-3" />
+                    </button>
+                    <span className="text-[11px] font-bold text-gray-500 w-5 text-center tabular-nums">{i + 1}</span>
+                    <button
+                      type="button"
+                      onClick={() => move(i, 1)}
+                      disabled={i === items.length - 1}
+                      className="p-0.5 rounded text-gray-300 hover:text-gray-600 hover:bg-gray-100 disabled:opacity-20"
+                    >
+                      <ChevronDown className="w-3 h-3" />
+                    </button>
+                  </div>
+
+                  {/* Contenido principal */}
+                  <div className="flex-1 min-w-0 p-3 sm:p-4">
+                    {/* Fila 1: folio + status + badges */}
+                    <div className="flex items-center gap-2 flex-wrap mb-2">
                       <Link
                         href={`/dashboard/inspector/expedientes/${exp.id}`}
-                        className="font-mono text-brand-green font-semibold text-xs hover:underline"
+                        className="font-mono text-brand-green font-bold text-sm hover:underline"
                       >
                         {exp.numero_folio}
                       </Link>
+                      <span className={STATUS_BADGE[exp.status] ?? STATUS_BADGE.borrador}>
+                        {STATUS_LABEL[exp.status] ?? exp.status}
+                      </span>
                       {exp.cli_completado_at && ['borrador', 'en_proceso'].includes(exp.status) && (
                         <span
-                          title={`Cliente notificó el ${new Date(exp.cli_completado_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })} — ya subió su información`}
+                          title={`Cliente notificó el ${new Date(exp.cli_completado_at).toLocaleDateString('es-MX', { day: 'numeric', month: 'short' })}`}
                           className="inline-flex items-center gap-1 text-[10px] font-semibold text-amber-700 bg-amber-100 border border-amber-200 rounded-full px-1.5 py-0.5"
                         >
                           <BellRing className="w-2.5 h-2.5" />
-                          Listo
+                          Cliente listo
+                        </span>
+                      )}
+                      {esDelegueYo && (
+                        <span
+                          title={`Delegaste la visita a ${ejecutorNombre || 'otro inspector'}`}
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold text-blue-700 bg-blue-100 border border-blue-200 rounded-full px-1.5 py-0.5"
+                        >
+                          <UserCog className="w-2.5 h-2.5" />
+                          Delegué a {ejecutorNombre.split(' ')[0]}
+                        </span>
+                      )}
+                      {meDelegaron && (
+                        <span
+                          title={`Te delegaron esta visita${exp.inspector ? ` desde ${exp.inspector.nombre}` : ''}`}
+                          className="inline-flex items-center gap-1 text-[10px] font-semibold text-purple-700 bg-purple-100 border border-purple-200 rounded-full px-1.5 py-0.5"
+                        >
+                          <UserCog className="w-2.5 h-2.5" />
+                          Delegado{exp.inspector ? ` por ${exp.inspector.nombre}` : ''}
                         </span>
                       )}
                     </div>
-                  </td>
-                  <td className="py-3 px-3 text-gray-800 hidden sm:table-cell">{exp.nombre_cliente_final ?? '—'}</td>
-                  <td className="py-3 px-3 text-gray-600 hidden sm:table-cell">{cliente?.nombre ?? '—'}</td>
-                  <td className="py-3 px-3 text-right text-gray-700 hidden md:table-cell">{exp.kwp ?? '—'}</td>
-                  <td className="py-3 px-3 text-gray-600 hidden lg:table-cell">{exp.ciudad ?? '—'}</td>
-                  <td className="py-3 px-3 text-center">
-                    <span className={STATUS_BADGE[exp.status] ?? STATUS_BADGE.borrador}>
-                      {STATUS_LABEL[exp.status] ?? exp.status}
-                    </span>
-                  </td>
-                  <td className="py-3 px-3 hidden lg:table-cell">
-                    <span className={`inline-flex items-center text-xs px-2 py-0.5 rounded-full border font-medium ${SP_CHIP[sp.color]}`}>
-                      {sp.texto}
-                    </span>
-                  </td>
-                  <td className="py-3 px-3 text-right text-gray-500 hidden md:table-cell">
-                    {exp.fecha_inicio ? formatDateShort(exp.fecha_inicio) : '—'}
-                  </td>
-                  <td className="py-3 px-2 text-right">
+
+                    {/* Fila 2: cliente final + EPC */}
+                    <div className="mb-2">
+                      <p className="text-sm font-semibold text-gray-900 truncate">
+                        {exp.nombre_cliente_final ?? cliente?.nombre ?? <span className="text-gray-400 font-normal italic">Sin cliente final</span>}
+                      </p>
+                      {cliente?.nombre && exp.nombre_cliente_final && cliente.nombre !== exp.nombre_cliente_final && (
+                        <p className="text-xs text-gray-500 truncate">EPC: {cliente.nombre}</p>
+                      )}
+                    </div>
+
+                    {/* Fila 3: meta info en chips */}
+                    <div className="flex items-center gap-x-3 gap-y-1 flex-wrap text-xs text-gray-500">
+                      {exp.kwp != null && (
+                        <span className="inline-flex items-center gap-1">
+                          <span className="font-semibold text-gray-700">{exp.kwp}</span> kWp
+                        </span>
+                      )}
+                      {exp.ciudad && (
+                        <span className="inline-flex items-center gap-1">
+                          📍 {exp.ciudad}
+                        </span>
+                      )}
+                      {exp.fecha_inicio && (
+                        <span className="inline-flex items-center gap-1">
+                          📅 {formatDateShort(exp.fecha_inicio)}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Fila 4: progress + siguiente paso (solo activos) */}
+                    {grupo !== 3 && (
+                      <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+                        {/* Checklist progress */}
+                        {exp.checklist_pct != null && (
+                          <div className="flex items-center gap-2 flex-1 min-w-[140px] max-w-[260px]">
+                            <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  (exp.checklist_pct ?? 0) >= 100 ? 'bg-emerald-500' :
+                                  (exp.checklist_pct ?? 0) >= 70 ? 'bg-orange-400' : 'bg-gray-300'
+                                }`}
+                                style={{ width: `${Math.max(exp.checklist_pct ?? 0, 4)}%` }}
+                              />
+                            </div>
+                            <span className={`text-[11px] font-bold tabular-nums ${
+                              (exp.checklist_pct ?? 0) >= 100 ? 'text-emerald-600' :
+                              (exp.checklist_pct ?? 0) >= 70 ? 'text-orange-500' : 'text-gray-400'
+                            }`}>
+                              {exp.checklist_pct ?? 0}%
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Siguiente paso */}
+                        <span className={`inline-flex items-center text-[11px] px-2 py-0.5 rounded-full border font-medium ${SP_CHIP[sp.color]}`}>
+                          {sp.texto}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Acciones */}
+                  <div className="flex flex-col items-end justify-center gap-1.5 px-3 py-3 border-l border-gray-100">
+                    <BotonZipCompacto
+                      expedienteId={exp.id}
+                      numeroFolio={exp.numero_folio}
+                      status={exp.status}
+                      respaldoDescargadoAt={exp.respaldo_descargado_at ?? null}
+                      respaldoArchivadoAt={exp.respaldo_archivado_at ?? null}
+                      respaldoBorradoAt={exp.respaldo_borrado_at ?? null}
+                    />
                     <Link
                       href={`/dashboard/inspector/expedientes/${exp.id}`}
-                      className="text-xs text-brand-green hover:underline font-medium"
+                      className="text-xs text-brand-green hover:underline font-semibold whitespace-nowrap"
                     >
                       Ver →
                     </Link>
-                  </td>
-                </tr>
-                </>
-              )
-            })}
-          </tbody>
-        </table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </div>
+      )}
     </div>
   )
 }
@@ -657,12 +915,22 @@ function AdminView({
                       {exp.fecha_inicio ? formatDateShort(exp.fecha_inicio) : '—'}
                     </td>
                     <td className="py-2.5 px-2 text-right">
-                      <Link
-                        href={`/dashboard/inspector/expedientes/${exp.id}`}
-                        className="text-xs text-gray-400 hover:underline hover:text-brand-green font-medium"
-                      >
-                        Ver →
-                      </Link>
+                      <div className="flex items-center justify-end gap-2">
+                        <BotonZipCompacto
+                          expedienteId={exp.id}
+                          numeroFolio={exp.numero_folio}
+                          status={exp.status}
+                          respaldoDescargadoAt={exp.respaldo_descargado_at ?? null}
+                          respaldoArchivadoAt={exp.respaldo_archivado_at ?? null}
+                          respaldoBorradoAt={exp.respaldo_borrado_at ?? null}
+                        />
+                        <Link
+                          href={`/dashboard/inspector/expedientes/${exp.id}`}
+                          className="text-xs text-gray-400 hover:underline hover:text-brand-green font-medium"
+                        >
+                          Ver →
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -686,8 +954,10 @@ export default function ExpedientesOrdenables({ expedientes, rol, userId, inspec
     return <AdminView expedientes={expedientes} inspectores={inspectores} />
   }
 
-  // For inspector/auxiliar: draggable list
-  const myRows = expedientes.filter(e => e.inspector_id === userId)
+  // Inspector ve sus propios + los delegados a él
+  const myRows = expedientes.filter(e =>
+    e.inspector_id === userId || e.inspector_ejecutor_id === userId
+  )
 
   if (myRows.length === 0) {
     return (
@@ -702,6 +972,7 @@ export default function ExpedientesOrdenables({ expedientes, rol, userId, inspec
   return (
     <DraggableList
       rows={myRows}
+      userId={userId}
       onReorder={ids => setOrderedIds(ids)}
     />
   )

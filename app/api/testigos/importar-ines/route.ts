@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { registrarCostoIA } from '@/lib/ai/cost'
 
 const anthropic = new Anthropic()
 
@@ -157,11 +158,27 @@ export async function POST(req: NextRequest) {
           ]
         }
 
+        const MODELO = 'claude-opus-4-5'
         const message = await anthropic.messages.create({
-          model: 'claude-opus-4-5',
+          model: MODELO,
           max_tokens: 512,
           messages: [{ role: 'user', content: messageContent }],
         })
+
+        // Registrar costo (uno por cada INE procesada)
+        try {
+          const dbAdmin = await createServiceClient()
+          const { data: { user: usrCost } } = await supabase.auth.getUser()
+          await registrarCostoIA({
+            supabase:     dbAdmin,
+            usuarioId:    usrCost?.id ?? null,
+            expedienteId: null,
+            endpoint:     'testigos/importar-ines',
+            modelo:       MODELO,
+            usage:        message.usage,
+            detalle:      { archivo: archivo.name },
+          })
+        } catch {}
 
         const raw = (message.content[0] as any)?.text ?? ''
         const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim())

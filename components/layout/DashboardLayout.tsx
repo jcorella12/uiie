@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { UserRole } from '@/lib/types'
 import Sidebar from './Sidebar'
-import { Info, Menu, Zap } from 'lucide-react'
+import { Info, Menu } from 'lucide-react'
 
 interface DashboardLayoutProps {
   children: React.ReactNode
@@ -97,8 +97,8 @@ export default function DashboardLayout({ children, rol, nombre }: DashboardLayo
             <Menu className="w-5 h-5" />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 bg-white/15 rounded-md flex items-center justify-center">
-              <Zap className="w-3.5 h-3.5 text-white" />
+            <div className="w-7 h-7 bg-white rounded-md flex items-center justify-center p-0.5">
+              <img src="/logo-ciae-icon.png" alt="CIAE" className="w-full h-full object-contain" />
             </div>
             <span className="text-white font-bold text-sm tracking-wide">CIAE</span>
             <span className="text-white/40 text-[10px] tracking-wider">UIIE-CRE-021</span>

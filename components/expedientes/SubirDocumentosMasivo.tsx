@@ -18,6 +18,7 @@ const TIPO_LABELS: Record<DocumentoTipo, string> = {
   acta:               'Acta de Inspección',
   lista_verificacion: 'Lista de Verificación',
   resolutivo:         'Resolutivo CFE',
+  ficha_pago:         'Ficha de Pago (Resolutivo)',
   fotografia:         'Fotografía',
   certificado_cre:    'Certificado CNE',
   acuse_cre:          'Acuse CNE',
@@ -28,7 +29,7 @@ const TIPO_LABELS: Record<DocumentoTipo, string> = {
 const IA_KEY_TIPOS: DocumentoTipo[] = ['resolutivo', 'dictamen', 'plano', 'memoria_tecnica']
 
 const TIPOS_LISTA: DocumentoTipo[] = [
-  'acta', 'lista_verificacion', 'resolutivo', 'dictamen',
+  'acta', 'lista_verificacion', 'resolutivo', 'ficha_pago', 'dictamen',
   'plano', 'memoria_tecnica', 'contrato', 'fotografia',
   'certificado_cre', 'acuse_cre', 'otro',
 ]
@@ -113,16 +114,36 @@ function DropZone({ onFiles }: { onFiles: (f: File[]) => void }) {
       onDragLeave={() => setDrag(false)}
       onDrop={e => { e.preventDefault(); setDrag(false); const f = Array.from(e.dataTransfer.files); if (f.length) onFiles(f) }}
       onClick={() => ref.current?.click()}
-      className={`cursor-pointer rounded-xl border-2 border-dashed transition-all flex flex-col items-center justify-center gap-2 py-8 px-6 text-center ${drag ? 'border-brand-green bg-brand-green-light scale-[1.01]' : 'border-gray-300 hover:border-brand-green/50 hover:bg-gray-50'}`}
+      className={`group cursor-pointer rounded-xl border-2 border-dashed transition-all flex flex-col items-center justify-center gap-3 py-10 px-6 text-center ${
+        drag
+          ? 'border-brand-green bg-brand-green-light scale-[1.01] shadow-md'
+          : 'border-gray-300 hover:border-brand-green hover:bg-emerald-50/40 hover:shadow-sm'
+      }`}
     >
       <input id={uid} ref={ref} type="file" multiple className="hidden"
         onChange={e => { const f = Array.from(e.target.files ?? []); if (f.length) onFiles(f); e.target.value = '' }} />
-      <div className={`w-11 h-11 rounded-full flex items-center justify-center ${drag ? 'bg-brand-green/20' : 'bg-gray-100'}`}>
-        <UploadCloud className={`w-5 h-5 ${drag ? 'text-brand-green' : 'text-gray-400'}`} />
+      {/* Ícono más grande con animación al hover */}
+      <div className={`w-14 h-14 rounded-full flex items-center justify-center transition-all ${
+        drag
+          ? 'bg-brand-green/20 scale-110'
+          : 'bg-gray-100 group-hover:bg-brand-green/10 group-hover:scale-105'
+      }`}>
+        <UploadCloud className={`w-7 h-7 transition-colors ${
+          drag ? 'text-brand-green' : 'text-gray-400 group-hover:text-brand-green'
+        }`} />
       </div>
       <div>
-        <p className="text-sm font-semibold text-gray-700">{drag ? 'Suelta los archivos aquí' : 'Arrastra múltiples archivos o haz clic para seleccionar'}</p>
-        <p className="text-xs text-gray-400 mt-0.5">PDFs, imágenes, Word, Excel — cualquier tipo · Sin límite</p>
+        <p className="text-base font-semibold text-gray-800">
+          {drag ? '✋ Suelta para subir' : 'Arrastra archivos aquí'}
+        </p>
+        <p className="text-sm text-gray-500 mt-0.5">
+          {drag ? 'Los archivos se cargarán automáticamente' : (
+            <>o <span className="text-brand-green font-medium underline">haz clic para seleccionarlos</span></>
+          )}
+        </p>
+        <p className="text-xs text-gray-400 mt-1.5">
+          PDF · Imágenes · Word · Excel · cualquier formato
+        </p>
       </div>
     </div>
   )
