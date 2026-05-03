@@ -23,16 +23,32 @@ export async function POST(req: NextRequest) {
   if (!fecha_hora) {
     return NextResponse.json({ error: 'La fecha y hora son obligatorias.' }, { status: 400 })
   }
+  if (!expediente_id) {
+    return NextResponse.json({ error: 'Falta expediente_id.' }, { status: 400 })
+  }
+
+  // Cargar el expediente y verificar ownership: solo inspector_responsable o
+  // el inspector dueño / ejecutor pueden agendar visitas para este expediente.
+  const { data: exp } = await supabase
+    .from('expedientes')
+    .select('inspector_id, inspector_ejecutor_id')
+    .eq('id', expediente_id)
+    .maybeSingle()
+  if (!exp) {
+    return NextResponse.json({ error: 'Expediente no encontrado' }, { status: 404 })
+  }
+
+  const esResponsable = usuario.rol === 'inspector_responsable'
+  const esDueno      = exp.inspector_id === user.id
+  const esEjecutor   = exp.inspector_ejecutor_id === user.id
+  if (!esResponsable && !esDueno && !esEjecutor) {
+    return NextResponse.json({ error: 'No autorizado para agendar en este expediente' }, { status: 403 })
+  }
 
   // Para inspector_responsable: usar el inspector_id del expediente, no el propio uid
   let resolvedInspectorId = user.id
-  if (usuario.rol === 'inspector_responsable' && expediente_id) {
-    const { data: exp } = await supabase
-      .from('expedientes')
-      .select('inspector_id')
-      .eq('id', expediente_id)
-      .single()
-    if (exp?.inspector_id) resolvedInspectorId = exp.inspector_id
+  if (esResponsable && exp.inspector_id) {
+    resolvedInspectorId = exp.inspector_id
   }
 
   // Si se especifica un inspector ejecutor diferente, verificar que existe y es inspector activo

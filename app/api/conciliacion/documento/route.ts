@@ -70,14 +70,20 @@ export async function POST(request: NextRequest) {
 
     if (storageError) throw storageError
 
-    const { data: urlData } = db.storage.from('documentos').getPublicUrl(path)
-    const publicUrl = urlData.publicUrl
+    // El bucket "documentos" es privado — la URL pública NO funciona.
+    // Persistimos solo el storage_path; la URL firmada se genera bajo demanda
+    // al leer el documento (lifetime corto, regenerable).
+    const { data: signed } = await db.storage
+      .from('documentos')
+      .createSignedUrl(path, 60 * 60)
+    const signedUrl = signed?.signedUrl ?? null
 
-    // Actualizar conciliación
+    // Actualizar conciliación. Las columnas *_url se mantienen para retrocompat,
+    // pero el path es la fuente de verdad.
     const updatePayload: Record<string, unknown> = { updated_at: new Date().toISOString() }
 
     if (tipo === 'factura') {
-      updatePayload.factura_url          = publicUrl
+      updatePayload.factura_url          = signedUrl
       updatePayload.factura_storage_path = path
       updatePayload.factura_nombre       = file.name
       updatePayload.factura_subida_at    = new Date().toISOString()
@@ -85,7 +91,7 @@ export async function POST(request: NextRequest) {
       // Avanzar status si estaba en aceptada
       if (conc.status === 'aceptada') updatePayload.status = 'facturada'
     } else {
-      updatePayload.comprobante_url          = publicUrl
+      updatePayload.comprobante_url          = signedUrl
       updatePayload.comprobante_storage_path = path
       updatePayload.comprobante_nombre       = file.name
       updatePayload.comprobante_subido_at    = new Date().toISOString()
@@ -100,7 +106,7 @@ export async function POST(request: NextRequest) {
 
     if (updateError) throw updateError
 
-    return NextResponse.json({ success: true, url: publicUrl, nombre: file.name })
+    return NextResponse.json({ success: true, url: signedUrl, nombre: file.name })
 
   } catch (err: any) {
     console.error('[conciliacion/documento]', err)

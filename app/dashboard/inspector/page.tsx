@@ -114,37 +114,47 @@ export default async function DashboardInspector() {
     { data: proximasInspecciones },
     { data: expActivos },
   ] = await Promise.all([
-    supabase.from('expedientes').select('*', { count: 'exact', head: true }).eq('inspector_id', inspectorId),
+    // Expedientes/solicitudes/agenda incluyen tanto los del inspector_id como
+    // los donde el usuario es inspector_ejecutor_id (delegación).
+    supabase.from('expedientes').select('*', { count: 'exact', head: true })
+      .or(`inspector_id.eq.${inspectorId},inspector_ejecutor_id.eq.${inspectorId}`),
     supabase.from('solicitudes_folio').select('*', { count: 'exact', head: true })
-      .eq('inspector_id', inspectorId).eq('status', 'pendiente'),
+      .or(`inspector_id.eq.${inspectorId},inspector_ejecutor_id.eq.${inspectorId}`)
+      .eq('status', 'pendiente'),
     supabase.from('inspecciones_agenda').select('*', { count: 'exact', head: true })
-      .eq('inspector_id', inspectorId).eq('status', 'programada')
+      .or(`inspector_id.eq.${inspectorId},inspector_ejecutor_id.eq.${inspectorId}`)
+      .eq('status', 'programada')
       .gte('fecha_hora', new Date().toISOString())
       .lte('fecha_hora', new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString()),
     supabase.from('solicitudes_folio').select('*', { count: 'exact', head: true })
-      .eq('inspector_id', inspectorId).eq('status', 'folio_asignado'),
+      .or(`inspector_id.eq.${inspectorId},inspector_ejecutor_id.eq.${inspectorId}`)
+      .eq('status', 'folio_asignado'),
     supabase.from('expedientes').select('*', { count: 'exact', head: true })
-      .eq('inspector_id', inspectorId).eq('status', 'revision'),
+      .or(`inspector_id.eq.${inspectorId},inspector_ejecutor_id.eq.${inspectorId}`)
+      .eq('status', 'revision'),
     supabase.from('expedientes').select('*', { count: 'exact', head: true })
-      .eq('inspector_id', inspectorId).in('status', ['rechazado', 'devuelto']),
+      .or(`inspector_id.eq.${inspectorId},inspector_ejecutor_id.eq.${inspectorId}`)
+      .in('status', ['rechazado', 'devuelto']),
     supabase.from('expedientes').select('*', { count: 'exact', head: true })
-      .eq('inspector_id', inspectorId).in('status', ['en_proceso', 'borrador']),
+      .or(`inspector_id.eq.${inspectorId},inspector_ejecutor_id.eq.${inspectorId}`)
+      .in('status', ['en_proceso', 'borrador']),
     supabase.from('expedientes').select('*', { count: 'exact', head: true })
-      .eq('inspector_id', inspectorId).in('status', ['aprobado', 'cerrado']),
+      .or(`inspector_id.eq.${inspectorId},inspector_ejecutor_id.eq.${inspectorId}`)
+      .in('status', ['aprobado', 'cerrado']),
     supabase.from('solicitudes_folio')
       .select('id, cliente_nombre, propietario_nombre, kwp, precio_propuesto, status, created_at')
-      .eq('inspector_id', inspectorId)
+      .or(`inspector_id.eq.${inspectorId},inspector_ejecutor_id.eq.${inspectorId}`)
       .order('created_at', { ascending: false })
       .limit(5),
     supabase.from('inspecciones_agenda')
       .select('id, fecha_hora, direccion, status, expediente:expedientes(numero_folio, cliente:clientes(nombre))')
-      .eq('inspector_id', inspectorId)
+      .or(`inspector_id.eq.${inspectorId},inspector_ejecutor_id.eq.${inspectorId}`)
       .gte('fecha_hora', new Date().toISOString())
       .order('fecha_hora', { ascending: true })
       .limit(5),
     supabase.from('expedientes')
       .select('id, numero_folio, status, checklist_pct, cliente:clientes(nombre)')
-      .eq('inspector_id', inspectorId)
+      .or(`inspector_id.eq.${inspectorId},inspector_ejecutor_id.eq.${inspectorId}`)
       .in('status', ['devuelto', 'rechazado', 'en_proceso', 'borrador'])
       .order('created_at', { ascending: true })
       .limit(10),

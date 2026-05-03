@@ -49,9 +49,12 @@ export default async function AyudaPage() {
             { href: '#documentos',   icon: Archive,       label: 'Documentos & ZIP' },
             { href: '#ia',           icon: Brain,         label: 'IA del sistema' },
             { href: '#status',       icon: CheckCircle2,  label: 'Estados y badges' },
-            ...(esCliente   ? [{ href: '#cliente',   icon: Users, label: 'Para clientes' }] : []),
-            ...(esInspector ? [{ href: '#inspector', icon: Users, label: 'Para inspectores' }] : []),
-            ...(esAdmin     ? [{ href: '#admin',     icon: Shield,label: 'Para admins' }] : []),
+            ...(esCliente   ? [{ href: '#cliente',    icon: Users, label: 'Para clientes' }] : []),
+            ...(esInspector ? [{ href: '#inspector',  icon: Users, label: 'Para inspectores' }] : []),
+            ...(esAdmin     ? [{ href: '#admin',      icon: Shield,label: 'Para admins' }] : []),
+            ...((esInspector || esAdmin) ? [{ href: '#delegacion', icon: Users, label: 'Delegación de visitas' }] : []),
+            { href: '#faq',          icon: HelpCircle,    label: 'FAQ' },
+            { href: '#atajos',       icon: Lightbulb,     label: 'Tips' },
           ].map(({ href, icon: Icon, label }) => (
             <a key={href} href={href}
               className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:border-brand-green hover:bg-brand-green-light/40 transition-colors text-sm">
@@ -130,23 +133,39 @@ export default async function AyudaPage() {
 
         {/* Estructura del ZIP */}
         <div className="mt-6 rounded-xl bg-gray-900 text-gray-300 p-4 font-mono text-xs overflow-x-auto">
-          <p className="text-gray-500 mb-2">// Cuando se descarga el ZIP, queda así:</p>
+          <p className="text-gray-500 mb-2">// Cuando se descarga el ZIP, queda así (estructura CRE):</p>
           <pre className="leading-relaxed">{`UIIE-513-2026.zip
-├── resumen.txt              ← Metadata completa
-├── Resolutivo/
-├── Ficha_Pago/
-├── Plano/
-├── Memoria_Tecnica/
-├── Dictamen_UVIE/
-├── Acta/
-├── Lista_Verificacion/
-├── Contrato/
-├── Fotografias/
-├── Evidencia_Visita/
-├── Certificado_CNE/
-├── Acuse_CNE/
-├── INE_Participantes/
-└── Otros/`}</pre>
+├── resumen.txt                       ← Metadata completa
+├── 1. OFICIO RESOLUTIVO CFE/         ← Resolutivo / oficio CENACE
+├── 2. DICTAMEN DE VERIFICACIÓN/      ← Dictamen UVIE
+├── 3. DU y MDC/                      ← Diagrama unifilar y memoria de cálculo
+├── 4. CERTIFICADO INVERSOR/          ← Cert UL · u oficio CNE de homologación
+├── 5. FOTOGRAFÍAS INSTALACIÓN/       ← Evidencia de visita
+├── 6. IDENTIFICACIONES/              ← INE firmante + INEs testigos
+├── 7. DOCUMENTOS/                    ← Acta, lista, contrato, recibos CFE
+├── 8. COTIZACIÓN FACTURA/            ← Ficha de pago
+├── 9. INFORME DE INSPECCIÓN/         ← Documento aparte (en construcción)
+└── 10. OPE/                          ← Certificado CRE + Acuse`}</pre>
+        </div>
+
+        {/* Homologación de marca de inversor */}
+        <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm space-y-2">
+          <p className="font-semibold text-emerald-900 flex items-center gap-2">
+            <Shield className="w-4 h-4" /> Homologación automática del inversor
+          </p>
+          <p className="text-emerald-800/90">
+            Algunas marcas de inversor (p.ej. <strong>Huawei</strong>) cuentan con un oficio
+            oficial de la CNE que reconoce el cumplimiento de la <strong>RES/142/2017</strong> mediante
+            reportes alternos a UL 1741. Cuando el expediente tiene una marca homologada, el sistema:
+          </p>
+          <ul className="list-disc pl-5 text-emerald-800/90 space-y-1">
+            <li>Sugiere la <strong>redacción exacta</strong> para la lista de verificación y el acta
+              (con un botón "Copiar" en la sección de Información Técnica).</li>
+            <li>Incluye automáticamente el oficio CNE y la carta del fabricante en la carpeta
+              <code className="bg-white px-1 mx-1 rounded">4. CERTIFICADO INVERSOR</code> del ZIP.</li>
+            <li>El admin puede registrar nuevas marcas homologadas desde la BD
+              (<code className="bg-white px-1 rounded">inversor_homologaciones</code>).</li>
+          </ul>
         </div>
       </Section>
 
@@ -309,17 +328,94 @@ export default async function AyudaPage() {
       {esCliente && (
         <Section id="cliente" icon={Users} title="Guía para clientes">
           <p className="text-sm text-gray-700 mb-3">
-            Como cliente final ves un portal simplificado donde puedes:
+            Como cliente final ves un portal simplificado para que el inspector pueda armar
+            tu expediente con la menor fricción posible.
           </p>
-          <ul className="space-y-2 text-sm text-gray-700 list-disc pl-5">
-            <li>Ver todos tus proyectos y su estado en tiempo real</li>
-            <li>Subir documentos requeridos: oficio resolutivo CFE, diagrama, memoria, dictamen UVIE</li>
-            <li>Capturar datos del firmante y de la persona que atenderá la visita</li>
-            <li>Marcar "Información completa" para notificar al inspector</li>
-            <li>Descargar tu certificado CNE una vez emitido</li>
-          </ul>
+
+          <h3 className="font-semibold text-gray-800 mt-4 mb-2">¿Qué tienes que hacer?</h3>
+          <ol className="space-y-2 text-sm text-gray-700 list-decimal pl-5">
+            <li><strong>Llena tus datos del firmante</strong> — nombre, INE (frente y reverso), CURP, teléfono, correo. La INE se procesa con OCR y rellena automáticamente.</li>
+            <li><strong>Datos de quien atiende la visita</strong> — si es la misma persona que firma, marca la casilla; si no, captura nombre + INE + contacto.</li>
+            <li><strong>Sube los documentos del proyecto</strong> — oficio resolutivo CFE, diagrama unifilar, memoria de cálculo, dictamen UVIE. Se guardan en tu expediente.</li>
+            <li><strong>Marca "Información completa"</strong> — el inspector recibe una notificación y puede continuar el expediente.</li>
+            <li><strong>Cuando se emita tu certificado CNE</strong>, podrás descargarlo desde tu portal.</li>
+          </ol>
+
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm space-y-2">
+            <p className="font-semibold text-amber-900 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" /> Importante
+            </p>
+            <ul className="text-amber-800 list-disc pl-5 space-y-1">
+              <li>El sistema solo te deja ver y modificar <strong>tus propios proyectos</strong>.
+                  No puedes subir información a un expediente que no es tuyo.</li>
+              <li>Las fechas y horas de las visitas las programa el inspector — tú no necesitas
+                  agendar nada.</li>
+              <li>Si tu inversor es <strong>Huawei</strong>, el inspector ya tiene la documentación
+                  de la CNE precargada que homologa su uso conforme a la RES/142/2017.</li>
+            </ul>
+          </div>
         </Section>
       )}
+
+      {/* ─────────────────────────────────────────────────────────────── */}
+      {(esInspector || esAdmin) && (
+        <Section id="delegacion" icon={Users} title="Delegación de visitas (ejecutor)">
+          <p className="text-sm text-gray-700 mb-3">
+            En la unidad somos varios inspectores y a veces un folio asignado a uno se ejecuta
+            físicamente por otro (por logística o disponibilidad). El sistema soporta esto con
+            dos campos:
+          </p>
+          <ul className="text-sm text-gray-700 space-y-1 list-disc pl-5">
+            <li><strong>inspector_id</strong> = el dueño del folio (responsable para conciliación / pago).</li>
+            <li><strong>inspector_ejecutor_id</strong> = el inspector que físicamente hace la visita.</li>
+          </ul>
+          <p className="text-sm text-gray-700 mt-3">
+            Cuando son la misma persona, no necesitas configurar nada. Si delegas la visita, al
+            crear la solicitud (o al programar la inspección) elige el ejecutor del dropdown.
+            Tanto el inspector dueño como el ejecutor verán el expediente en su dashboard, en
+            "Mis expedientes" y en su agenda.
+          </p>
+          <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+            La conciliación y el pago siguen al <code className="bg-white px-1 rounded">inspector_id</code> (dueño del folio),
+            no al ejecutor — ese acuerdo se maneja entre los dos inspectores fuera del sistema.
+          </div>
+        </Section>
+      )}
+
+      {/* ─────────────────────────────────────────────────────────────── */}
+      <Section id="faq" icon={HelpCircle} title="Preguntas frecuentes">
+        <FAQ q="¿Por qué la visita aparece a una hora distinta de la que capturé?">
+          La hora se guarda en zona México (UTC-6, sin horario de verano). Si entras desde otro
+          país verás la hora ajustada al uso horario de tu navegador, pero la hora oficial en
+          el acta es la de México.
+        </FAQ>
+        <FAQ q="¿Qué hago si capturé un folio incorrecto?">
+          Solo el admin / inspector_responsable puede liberar un folio mal asignado. Avísale
+          para que ejecute "Recrear expediente" desde la sección Folios.
+        </FAQ>
+        <FAQ q="¿Puedo cambiar el cliente final de un expediente cerrado?">
+          No. Una vez emitido el certificado, los datos del cliente final son los que reportamos
+          a la CRE. Si hay un error, contacta al admin para corrección manual con auditoría.
+        </FAQ>
+        <FAQ q="¿Cómo sé si un cert CRE ya está emitido?">
+          El expediente cambia a estado <span className="text-emerald-700 font-medium">Cerrado</span> con
+          un badge verde con el número de certificado (UIIE-CC-NNNNN-YYYY). Aparece el botón
+          ZIP para descargar el respaldo completo.
+        </FAQ>
+        <FAQ q="Mi inversor es Huawei pero no veo la redacción sugerida">
+          Verifica que en Información Técnica hayas seleccionado un inversor Huawei del catálogo
+          (no solo escrito "Huawei" en otro campo). La redacción aparece automáticamente debajo
+          del selector de inversor.
+        </FAQ>
+        <FAQ q="¿Por qué me bloquea para enviar a revisión?">
+          El checklist tiene que estar al 100%. Click en el badge "Checklist X%" para ver
+          exactamente qué punto falta y qué dato lo desbloquea.
+        </FAQ>
+        <FAQ q="Subí un documento equivocado ¿cómo lo borro?">
+          En la sección Documentos, cada archivo tiene un menú "⋮" con opción Borrar. Si el
+          expediente ya está enviado a revisión, contacta al admin.
+        </FAQ>
+      </Section>
 
       {/* ─────────────────────────────────────────────────────────────── */}
       {esInspector && (
@@ -497,4 +593,16 @@ function StatusExp({ tono, label, desc }: { tono: string; label: string; desc: s
 
 function code(s: string) {
   return <code className="bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded text-xs font-mono">{s}</code>
+}
+
+function FAQ({ q, children }: { q: string; children: React.ReactNode }) {
+  return (
+    <details className="rounded-lg border border-gray-200 bg-white open:bg-gray-50 transition-colors">
+      <summary className="px-3 py-2.5 cursor-pointer text-sm font-semibold text-gray-800 flex items-center justify-between">
+        <span>{q}</span>
+        <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0 transition-transform [details[open]_&]:rotate-90" />
+      </summary>
+      <div className="px-3 pb-3 pt-0 text-sm text-gray-600">{children}</div>
+    </details>
+  )
 }

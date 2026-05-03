@@ -118,6 +118,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Parámetro lado requerido para imágenes.' }, { status: 400 })
   }
 
+  // ── Validar entityType y ownership del entityId ──────────────────────────────
+  // Sin esto un usuario podría sobreescribir la INE de cualquier cliente o testigo.
+  if (entityType && !['cliente', 'testigo'].includes(entityType)) {
+    return NextResponse.json({ error: 'entity_type inválido.' }, { status: 400 })
+  }
+  if (entityType && entityId) {
+    const { data: profile } = await supabase
+      .from('usuarios').select('rol').eq('id', user.id).maybeSingle()
+    const esStaff   = profile && ['admin', 'inspector_responsable', 'inspector', 'auxiliar'].includes(profile.rol)
+    const esCliente = profile?.rol === 'cliente'
+
+    if (entityType === 'cliente') {
+      // Cliente solo puede subir INE de su propio cliente
+      if (esCliente) {
+        const { data: c } = await supabase
+          .from('clientes').select('id').eq('id', entityId).eq('usuario_id', user.id).maybeSingle()
+        if (!c) return NextResponse.json({ error: 'No autorizado para esta INE' }, { status: 403 })
+      } else if (!esStaff) {
+        return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+      }
+    } else {
+      // testigo: solo staff
+      if (!esStaff) return NextResponse.json({ error: 'Sin permisos' }, { status: 403 })
+    }
+  }
+
   const arrayBuffer = await file.arrayBuffer()
   const buffer      = Buffer.from(arrayBuffer)
   const base64      = buffer.toString('base64')

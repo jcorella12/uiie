@@ -7,6 +7,7 @@ import {
   Shield, FileText, FileCheck, MessageSquare,
 } from 'lucide-react'
 import CollapsibleSection from '@/components/ui/CollapsibleSection'
+import HomologacionInversorCard from '@/components/expedientes/HomologacionInversorCard'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -501,6 +502,13 @@ export default function InfoTecnicaForm({ expediente, cliente, inversores, readO
                   </option>
                 ))}
               </select>
+              {form.inversor_id && (
+                <div className="mt-3">
+                  <HomologacionInversorCard
+                    marca={inversores.find(i => i.id === form.inversor_id)?.marca ?? null}
+                  />
+                </div>
+              )}
             </Field>
             <Field label="Tipo de conexión">
               <select value={form.tipo_conexion} onChange={set('tipo_conexion')} className={selectCls}>

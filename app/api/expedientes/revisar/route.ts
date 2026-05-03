@@ -22,6 +22,20 @@ export async function PATCH(req: NextRequest) {
 
   const db = await createServiceClient()
 
+  // Solo permitir cambio de status si el expediente está en estado 'revision'
+  // (significa que el inspector ya envió a revisión y el admin lo evalúa).
+  // Bloquea reapertura accidental de un expediente ya cerrado o aprobado.
+  const { data: expActual } = await db
+    .from('expedientes').select('status').eq('id', expediente_id).maybeSingle()
+  if (!expActual) {
+    return NextResponse.json({ error: 'Expediente no encontrado' }, { status: 404 })
+  }
+  if (expActual.status !== 'revision') {
+    return NextResponse.json({
+      error: `El expediente debe estar en revisión para aprobarse o devolverse (status actual: ${expActual.status})`,
+    }, { status: 409 })
+  }
+
   // Actualizar expediente
   const nuevoStatus = decision === 'aprobado' ? 'aprobado' : 'devuelto'
   await db

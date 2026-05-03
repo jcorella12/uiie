@@ -81,6 +81,32 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(data)
   } else {
     // ── INSERT ──
+    const { data: profile } = await supabase
+      .from('usuarios')
+      .select('rol')
+      .eq('id', user.id)
+      .maybeSingle()
+    const rolesStaff = ['admin', 'inspector_responsable', 'inspector', 'auxiliar']
+    const esStaff   = profile && rolesStaff.includes(profile.rol)
+    const esCliente = profile?.rol === 'cliente'
+
+    if (!esStaff && !esCliente) {
+      return NextResponse.json({ error: 'Sin permisos para crear cliente' }, { status: 403 })
+    }
+
+    // Cliente self-service: forzamos usuario_id = ellos mismos y limitamos a 1
+    // registro por usuario para evitar spam.
+    if (esCliente) {
+      cleanFields.usuario_id = user.id
+      const { count } = await supabase
+        .from('clientes')
+        .select('id', { count: 'exact', head: true })
+        .eq('usuario_id', user.id)
+      if ((count ?? 0) > 0) {
+        return NextResponse.json({ error: 'Ya tienes un cliente vinculado' }, { status: 409 })
+      }
+    }
+
     const { data, error } = await supabase
       .from('clientes')
       .insert({ ...cleanFields, created_by: user.id })

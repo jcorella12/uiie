@@ -43,7 +43,9 @@ export default function LoginPage() {
       if (rol === 'inspector_responsable') router.push('/dashboard')
       else if (rol === 'admin') router.push('/dashboard/admin')
       else if (rol === 'inspector') router.push('/dashboard/inspector')
-      else router.push('/dashboard/cliente')
+      else if (rol === 'auxiliar') router.push('/dashboard/inspector')
+      else if (rol === 'cliente') router.push('/dashboard/cliente')
+      else router.push('/dashboard')
 
       router.refresh()
     }

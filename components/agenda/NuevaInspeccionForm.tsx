@@ -307,7 +307,9 @@ export default function NuevaInspeccionForm({
     setLoading(true)
     setError(null)
 
-    const fechaHora = `${selectedDate}T${selectedTime}:00`
+    // CRÍTICO: agregar offset de México (UTC-6, sin DST). Sin esto, Postgres
+    // TIMESTAMPTZ asume UTC y la cita queda con 6 horas de adelanto.
+    const fechaHora = `${selectedDate}T${selectedTime}:00-06:00`
 
     try {
       const res = await fetch('/api/inspecciones/nueva', {

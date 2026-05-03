@@ -118,17 +118,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Error al registrar el documento' }, { status: 500 })
   }
 
-  // Generar URL pública
-  const { data: urlData } = serviceClient.storage.from('documentos').getPublicUrl(storagePath)
+  // El bucket "documentos" es privado — generar URL firmada (1 hora).
+  // Para descargas posteriores el cliente regenera bajo demanda con storage_path.
+  const { data: urlData } = await serviceClient.storage
+    .from('documentos')
+    .createSignedUrl(storagePath, 60 * 60)
 
   return NextResponse.json({
     ok: true,
     doc: {
-      id:          docRecord.id,
-      nombre:      docRecord.nombre,
-      tipo:        docRecord.tipo,
+      id:           docRecord.id,
+      nombre:       docRecord.nombre,
+      tipo:         docRecord.tipo,
       storage_path: docRecord.storage_path,
-      publicUrl:   urlData.publicUrl,
+      url:          urlData?.signedUrl ?? null,
     },
   })
 }

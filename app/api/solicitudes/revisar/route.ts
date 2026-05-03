@@ -31,6 +31,35 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: 'Status no permitido' }, { status: 400 })
     }
 
+    // Validar transición — la matriz de transiciones permitidas es:
+    //   pendiente    → en_revision | aprobada | rechazada
+    //   en_revision  → aprobada    | rechazada
+    //   aprobada     → (terminal — sólo admin moviendo manualmente, no aquí)
+    //   rechazada    → (terminal)
+    //   folio_asignado → (terminal — el folio ya está asignado, no se puede des-revisar)
+    const db = await createServiceClient()
+    const { data: solActual, error: errLoad } = await db
+      .from('solicitudes_folio')
+      .select('status')
+      .eq('id', solicitudId)
+      .maybeSingle()
+    if (errLoad || !solActual) {
+      return NextResponse.json({ error: 'Solicitud no encontrada' }, { status: 404 })
+    }
+
+    const transiciones: Record<string, string[]> = {
+      pendiente:      ['en_revision', 'aprobada', 'rechazada'],
+      en_revision:    ['aprobada', 'rechazada'],
+      aprobada:       [],
+      rechazada:      [],
+      folio_asignado: [],
+    }
+    if (!(transiciones[solActual.status] ?? []).includes(nuevoStatus)) {
+      return NextResponse.json({
+        error: `Transición no permitida: ${solActual.status} → ${nuevoStatus}`,
+      }, { status: 409 })
+    }
+
     const updateData: Record<string, any> = {
       status: nuevoStatus,
       revisado_por: user.id,
@@ -41,7 +70,6 @@ export async function PATCH(request: NextRequest) {
     }
 
     // Usar serviceClient para el update (bypas RLS de escritura)
-    const db = await createServiceClient()
     const { error } = await db
       .from('solicitudes_folio')
       .update(updateData)

@@ -86,9 +86,10 @@ export async function POST(req: NextRequest) {
       .upload(storagePath, pdfBuffer, { contentType: 'application/pdf', upsert: true })
 
     if (!upErr) {
+      // 7 días — la URL se regenera bajo demanda con el storage_path
       const { data: signed } = await svc.storage
         .from(BUCKET)
-        .createSignedUrl(storagePath, 60 * 60 * 24 * 365 * 10)
+        .createSignedUrl(storagePath, 60 * 60 * 24 * 7)
       url_storage = signed?.signedUrl ?? null
     }
   } catch (err) {

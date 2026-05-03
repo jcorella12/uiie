@@ -119,7 +119,10 @@ export function Calendario({ inspectorId, isAdmin = false, inspectores = [] }: P
       .lt('fecha_hora', isoFin)
       .order('fecha_hora')
 
-    if (filtroInspector) q = q.eq('inspector_id', filtroInspector)
+    if (filtroInspector) {
+      // Incluir las visitas donde el usuario es ejecutor (delegación)
+      q = q.or(`inspector_id.eq.${filtroInspector},inspector_ejecutor_id.eq.${filtroInspector}`)
+    }
 
     let bq = supabase
       .from('dias_bloqueados')
