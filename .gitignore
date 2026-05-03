@@ -23,6 +23,11 @@
 # Claude Code internals
 .claude/
 
+# Mockups y archivos de diseño locales (no van al repo)
+/mejoras/
+/design-canvas.jsx
+/Propuesta CIAE.html
+
 # debug
 npm-debug.log*
 yarn-debug.log*

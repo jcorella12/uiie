@@ -55,4 +55,44 @@ body {
   .text-balance {
     text-wrap: balance;
   }
+
+  /* ─── Tabs segmented (filtros sobre tablas) ─────────────────────────────
+     Container blanco con padding interno; cada tab es chip clickable.
+     Uso:
+       <div class="tab-segmented">
+         <button class="tab-segmented-item is-active">…</button>
+         <button class="tab-segmented-item">…</button>
+       </div>
+     El estado activo se aplica con la clase `is-active`.                  */
+  .tab-segmented {
+    @apply inline-flex items-center gap-1 p-1.5 bg-white border border-border rounded-xl;
+  }
+  .tab-segmented-item {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[13px] font-medium text-muted hover:bg-bg transition-colors;
+  }
+  .tab-segmented-item.is-active {
+    @apply bg-brand-green-light text-brand-green-dark border border-brand-green/20;
+  }
+  .tab-segmented-item .dot {
+    @apply w-1.5 h-1.5 rounded-full bg-current opacity-60;
+  }
+  .tab-segmented-item .count {
+    @apply ml-0.5 inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold bg-bg text-ink2;
+  }
+  .tab-segmented-item.is-active .count {
+    @apply bg-brand-green text-white;
+  }
+
+  /* ─── Pill de delta para KPI cards ──────────────────────────────────────
+     Pequeño chip que muestra el cambio (+9 / −3 / 0%).
+     Uso:
+       <span class="kpi-delta-pill kpi-delta-up">+9 este mes</span>
+       <span class="kpi-delta-pill kpi-delta-down">−3 este mes</span>
+       <span class="kpi-delta-pill kpi-delta-flat">sin cambio</span>                                                            */
+  .kpi-delta-pill {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-semibold;
+  }
+  .kpi-delta-up   { @apply bg-brand-green-light text-brand-green-dark; }
+  .kpi-delta-down { @apply bg-red-50 text-red-700; }
+  .kpi-delta-flat { @apply bg-bg text-muted; }
 }

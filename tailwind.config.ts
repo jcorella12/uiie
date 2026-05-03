@@ -20,11 +20,25 @@ const config: Config = {
           "orange-dark": "#d4881a",
           "orange-light": "#fdf3e3",
         },
+        // Sidebar oscuro (más profundo que el #0A5C47 anterior)
+        sidebar: {
+          bg: "#073929",
+        },
+        // Tinta y muted — más ricos que gray-* genéricos
+        ink:    "#0F1B2D",  // títulos
+        ink2:   "#27374D",  // texto cuerpo
+        muted:  "#6B7689",  // meta/labels
+        border: "#E5E8EE",
+        bg:     "#F6F7F9",  // fondo app
         background: "var(--background)",
         foreground: "var(--foreground)",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
+      },
+      letterSpacing: {
+        tightish: "-0.3px",
+        tighter2: "-0.6px",
       },
     },
   },

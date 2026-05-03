@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -110,12 +111,30 @@ export default function NotificationBell() {
     return () => document.removeEventListener('mousedown', onDown)
   }, [])
 
-  // ── Abrir panel: calcular posición fixed para evitar overflow-hidden ─────────
+  // ── Abrir panel: calcular posición fixed (rect del bell en viewport coords) ──
+  // El panel se portea al body para escapar el stacking context del sidebar
+  // (que tiene `transform` para el drawer móvil).
   function handleBell() {
     if (!open && bellRef.current) {
       const rect = bellRef.current.getBoundingClientRect()
-      // Abrir a la derecha del sidebar (sidebar ~224px) con 12px de gap
-      setPanelPos({ top: rect.top, left: rect.right + 12 })
+      const PANEL_W = 320
+      const PANEL_H = 480 // máximo aproximado para evitar pasarse del viewport
+
+      // Por default: a la derecha del sidebar
+      let top  = rect.top
+      let left = rect.right + 12
+
+      // Si no cabe a la derecha (ej. móvil), abrir hacia arriba sobre el bell
+      if (left + PANEL_W > window.innerWidth - 12) {
+        left = Math.max(12, rect.left)
+        top  = Math.max(12, rect.bottom - PANEL_H)
+      }
+      // Si no cabe verticalmente (bell muy abajo), subir
+      if (top + PANEL_H > window.innerHeight - 12) {
+        top = Math.max(12, window.innerHeight - PANEL_H - 12)
+      }
+
+      setPanelPos({ top, left })
     }
     setOpen(v => !v)
   }
@@ -163,8 +182,8 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {/* Panel de notificaciones — fixed para evitar overflow-hidden del sidebar */}
-      {open && (
+      {/* Panel de notificaciones — porteado al body para escapar el stacking context del sidebar */}
+      {open && typeof document !== 'undefined' && createPortal(
         <div
           ref={panelRef}
           style={{ position: 'fixed', top: panelPos.top, left: panelPos.left }}
@@ -265,7 +284,8 @@ export default function NotificationBell() {
               </button>
             </div>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </>
   )
