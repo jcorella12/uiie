@@ -44,6 +44,8 @@ interface QueueFile {
   id: string
   file: File
   tipo: DocumentoTipo
+  /** Nombre personalizado cuando tipo === 'otro' (obligatorio en ese caso) */
+  customNombre?: string
   specialType: SpecialType
   status: ItemStatus
   error?: string
@@ -425,15 +427,69 @@ function ReciboCFEItem({ qf, expedienteId, onRemove, onUpdate, onRefresh }: {
       const res  = await fetch('/api/ocr/medidor', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'No se pudo leer el medidor')
+      // Mostramos la sugerencia editable; no marcamos saved hasta que el inspector confirme.
       onUpdate({
         reciboProcessing: false,
         reciboNumero:    data.numero_medidor ?? null,
         reciboConfianza: data.confianza ?? '',
-        reciboSaved:     !!data.numero_medidor,
-        status:          data.numero_medidor ? 'done' : 'error',
-        error:           data.numero_medidor ? undefined : 'No se encontró número de medidor en el documento',
+        reciboSaved:     false,
+        status:          'pending',
+        error:           data.numero_medidor ? undefined : 'No se encontró número de medidor — captúralo manualmente',
       })
-      if (data.numero_medidor) onRefresh()
+    } catch (err: any) {
+      onUpdate({ reciboProcessing: false, error: err.message, status: 'error' })
+    }
+  }
+
+  // Subir el archivo como documento normal (recibo_cfe), sin pedir extracción.
+  // Útil si el recibo trae el medidor ANTERIOR (no bidireccional).
+  async function handleSubirComoDocumento() {
+    onUpdate({ reciboProcessing: true, error: undefined })
+    try {
+      const fd = new FormData()
+      fd.append('file', qf.file)
+      fd.append('tipo', 'recibo_cfe')
+      fd.append('nombre', qf.file.name.replace(/\.[^/.]+$/, '') || qf.file.name)
+      fd.append('expediente_id', expedienteId)
+      const res = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'No se pudo subir')
+      onUpdate({ reciboProcessing: false, reciboSaved: true, status: 'done' })
+      onRefresh()
+    } catch (err: any) {
+      onUpdate({ reciboProcessing: false, error: err.message, status: 'error' })
+    }
+  }
+
+  // Confirmar y guardar el número de medidor (editado manualmente o sugerido por IA)
+  async function handleGuardarMedidor() {
+    if (!qf.reciboNumero?.trim()) {
+      onUpdate({ error: 'Captura el número de medidor antes de guardar' })
+      return
+    }
+    onUpdate({ reciboProcessing: true, error: undefined })
+    try {
+      const r = await fetch('/api/expedientes/guardar', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expediente_id: expedienteId,
+          numero_medidor: qf.reciboNumero.trim(),
+        }),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error ?? 'No se pudo guardar')
+
+      // Adicionalmente, registrar el archivo como documento recibo_cfe
+      const fd = new FormData()
+      fd.append('file', qf.file)
+      fd.append('tipo', 'recibo_cfe')
+      fd.append('nombre', qf.file.name.replace(/\.[^/.]+$/, '') || qf.file.name)
+      fd.append('expediente_id', expedienteId)
+      await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+
+      onUpdate({ reciboProcessing: false, reciboSaved: true, status: 'done' })
+      onRefresh()
     } catch (err: any) {
       onUpdate({ reciboProcessing: false, error: err.message, status: 'error' })
     }
@@ -460,18 +516,33 @@ function ReciboCFEItem({ qf, expedienteId, onRemove, onUpdate, onRefresh }: {
           : <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />}
       </div>
 
-      {!qf.reciboSaved && !qf.reciboProcessing && (
-        <button
-          onClick={handleOCR}
-          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700"
-        >
-          <Sparkles className="w-3.5 h-3.5" /> Extraer número de medidor con IA
-        </button>
+      {/* Estado inicial: ofrecer las dos vías + aviso sobre medidor anterior */}
+      {!qf.reciboSaved && !qf.reciboProcessing && qf.reciboNumero == null && (
+        <>
+          <p className="text-[11px] text-teal-800/80">
+            Ojo: en algunos recibos viene el medidor <strong>anterior</strong> (no bidireccional).
+            Si dudas, sube solo el documento y captura el medidor manualmente en Información Técnica.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={handleOCR}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700"
+            >
+              <Sparkles className="w-3.5 h-3.5" /> Extraer con IA
+            </button>
+            <button
+              onClick={handleSubirComoDocumento}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-teal-300 text-teal-700 text-xs font-semibold rounded-lg hover:bg-teal-50"
+            >
+              <FileText className="w-3.5 h-3.5" /> Solo subir
+            </button>
+          </div>
+        </>
       )}
 
       {qf.reciboProcessing && (
         <div className="flex items-center gap-2 text-xs text-teal-700">
-          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Leyendo recibo…
+          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Procesando…
         </div>
       )}
 
@@ -481,20 +552,56 @@ function ReciboCFEItem({ qf, expedienteId, onRemove, onUpdate, onRefresh }: {
         </p>
       )}
 
-      {qf.reciboSaved && qf.reciboNumero && (
-        <div className="flex items-center gap-3">
-          <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-          <div>
-            <p className="text-xs text-green-700 font-semibold">
-              Número de medidor guardado: <span className="font-mono">{qf.reciboNumero}</span>
-            </p>
+      {/* IA propuso un número — editable antes de confirmar */}
+      {!qf.reciboSaved && qf.reciboNumero != null && !qf.reciboProcessing && (
+        <div className="space-y-2">
+          <p className="text-[11px] text-teal-800">
+            La IA detectó un número. Verifícalo y edítalo si corresponde a otro medidor:
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={qf.reciboNumero ?? ''}
+              onChange={e => onUpdate({ reciboNumero: e.target.value, error: undefined })}
+              className="flex-1 px-3 py-1.5 rounded-lg border border-teal-300 text-sm font-mono bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
+              placeholder="Número de medidor"
+            />
             {qf.reciboConfianza && (
-              <span className={`inline-block mt-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded border ${confianzaColor}`}>
-                Confianza: {qf.reciboConfianza}
+              <span className={`text-[10px] font-medium px-1.5 py-1 rounded border ${confianzaColor}`}>
+                IA: {qf.reciboConfianza}
               </span>
             )}
           </div>
+          <div className="flex gap-2">
+            <button
+              onClick={handleGuardarMedidor}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700"
+            >
+              <CheckCircle className="w-3.5 h-3.5" /> Confirmar y guardar
+            </button>
+            <button
+              onClick={handleSubirComoDocumento}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-teal-300 text-teal-700 text-xs font-semibold rounded-lg hover:bg-teal-50"
+            >
+              Subir sin medidor
+            </button>
+          </div>
         </div>
+      )}
+
+      {qf.reciboSaved && qf.reciboNumero && (
+        <div className="flex items-center gap-3">
+          <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+          <p className="text-xs text-green-700 font-semibold">
+            Número guardado: <span className="font-mono">{qf.reciboNumero}</span>
+          </p>
+        </div>
+      )}
+
+      {qf.reciboSaved && !qf.reciboNumero && (
+        <p className="text-xs text-green-700 flex items-center gap-1">
+          <CheckCircle className="w-3.5 h-3.5" /> Recibo subido como documento (sin extracción de medidor)
+        </p>
       )}
     </div>
   )
@@ -502,22 +609,27 @@ function ReciboCFEItem({ qf, expedienteId, onRemove, onUpdate, onRefresh }: {
 
 // ─── Normal / IA-key item ─────────────────────────────────────────────────────
 
-function NormalItem({ qf, onChange, onRemove }: {
+function NormalItem({ qf, onChange, onCustomName, onRemove }: {
   qf: QueueFile
   onChange: (t: DocumentoTipo) => void
+  onCustomName: (n: string) => void
   onRemove: () => void
 }) {
   const isKey = qf.specialType === 'ia_key'
+  const requireCustomName = qf.tipo === 'otro'
+  const customNameMissing = requireCustomName && !qf.customNombre?.trim()
 
   return (
-    <div className={`flex items-center gap-3 py-2.5 px-3 rounded-xl border transition-colors ${
+    <div className={`py-2.5 px-3 rounded-xl border transition-colors ${
       qf.status === 'error'    ? 'border-red-200 bg-red-50' :
       qf.applied               ? 'border-green-200 bg-green-50' :
       qf.status === 'analyzing'? 'border-purple-200 bg-purple-50' :
       qf.status === 'uploading'? 'border-brand-green/30 bg-brand-green-light/30' :
       isKey                    ? 'border-blue-200 bg-blue-50' :
+      customNameMissing        ? 'border-amber-200 bg-amber-50' :
                                  'border-gray-200 bg-gray-50'
     }`}>
+      <div className="flex items-center gap-3">
       <div className="w-9 h-9 rounded-md overflow-hidden flex-shrink-0 flex items-center justify-center bg-white border border-gray-200">
         {qf.preview ? <img src={qf.preview} alt="" className="w-full h-full object-cover" /> : <FileText className="w-5 h-5 text-gray-400" />}
       </div>
@@ -553,6 +665,26 @@ function NormalItem({ qf, onChange, onRemove }: {
         {(qf.status === 'done' || qf.applied) && <CheckCircle className="w-4 h-4 text-green-500" />}
         {qf.status === 'error' && <span title={qf.error} className="cursor-help"><AlertTriangle className="w-4 h-4 text-red-500" /></span>}
       </div>
+      </div>
+
+      {/* Campo custom para "Otro" */}
+      {requireCustomName && qf.status === 'pending' && (
+        <div className="mt-2">
+          <input
+            type="text"
+            value={qf.customNombre ?? ''}
+            onChange={e => onCustomName(e.target.value)}
+            placeholder="Describe el documento (obligatorio para 'Otro')"
+            className="w-full text-xs border border-amber-300 bg-white rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-amber-500"
+            maxLength={120}
+          />
+          {customNameMissing && (
+            <p className="text-[10px] text-amber-700 mt-1">
+              Escribe un nombre descriptivo para este documento.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -601,10 +733,18 @@ export default function SubirDocumentosMasivo({ expedienteId }: Props) {
   }
 
   async function uploadOne(qf: QueueFile): Promise<void> {
+    // Si tipo='otro' requiere customNombre obligatorio
+    if (qf.tipo === 'otro' && !qf.customNombre?.trim()) {
+      updateItem(qf.id, { status: 'error', error: 'Falta el nombre del documento' })
+      return
+    }
     const fd = new FormData()
+    const nombreFinal = qf.tipo === 'otro' && qf.customNombre?.trim()
+      ? qf.customNombre.trim()
+      : qf.file.name.replace(/\.[^/.]+$/, '') || qf.file.name
     fd.append('file',          qf.file)
     fd.append('tipo',          qf.tipo)
-    fd.append('nombre',        qf.file.name.replace(/\.[^/.]+$/, '') || qf.file.name)
+    fd.append('nombre',        nombreFinal)
     fd.append('expediente_id', expedienteId)
 
     let documentoId: string | undefined
@@ -718,7 +858,13 @@ export default function SubirDocumentosMasivo({ expedienteId }: Props) {
               )}
               <div className="space-y-2">
                 {normalItems.map(qf => (
-                  <NormalItem key={qf.id} qf={qf} onChange={t => changeTipo(qf.id, t)} onRemove={() => removeItem(qf.id)} />
+                  <NormalItem
+                    key={qf.id}
+                    qf={qf}
+                    onChange={t => changeTipo(qf.id, t)}
+                    onCustomName={n => updateItem(qf.id, { customNombre: n })}
+                    onRemove={() => removeItem(qf.id)}
+                  />
                 ))}
               </div>
               <div className="flex items-center gap-3 pt-1">

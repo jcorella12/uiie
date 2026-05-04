@@ -9,6 +9,7 @@ import SubirDocumentoIA from '@/components/expedientes/SubirDocumentoIA'
 import EvidenciaVisitaSection from '@/components/expedientes/EvidenciaVisitaSection'
 import CertificadoSection from '@/components/expedientes/CertificadoSection'
 import RevisionSection from '@/components/expedientes/RevisionSection'
+import EnviarRevisionCTA from '@/components/expedientes/EnviarRevisionCTA'
 import DescargarRespaldoZip from '@/components/expedientes/DescargarRespaldoZip'
 import CollapsibleCard from '@/components/ui/CollapsibleCard'
 import { ExpedienteProgressBar } from '@/components/expedientes/ExpedienteProgressBar'
@@ -320,6 +321,22 @@ export default async function ExpedienteDetailPage({
           )}
         </div>
       </div>
+
+      {/* ── CTA: Enviar a revisión (visible al tope para que no se pierda) ── */}
+      {['borrador', 'en_proceso', 'devuelto'].includes(expediente.status) && (
+        <EnviarRevisionCTA
+          expedienteId={params.id}
+          status={expediente.status}
+          checklistPct={expediente.checklist_pct ?? 0}
+          numDocumentos={(documentosConUrl ?? []).length}
+          esAdmin={esAdmin}
+          esInspector={
+            expediente.inspector_id === user.id ||
+            expediente.inspector_ejecutor_id === user.id
+          }
+          fueRechazado={ultimoEnvio?.decision === 'rechazado'}
+        />
+      )}
 
       {/* ── Sección 1: Información Técnica — colapsable ── */}
       <CollapsibleCard

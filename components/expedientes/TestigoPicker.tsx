@@ -344,6 +344,10 @@ function CrearTestigoForm({
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al guardar')
+      // Si el endpoint detectó que ya existía (mismo INE), avisar al usuario.
+      if (data.existing) {
+        setError('Esta INE ya existe en el catálogo — usando registro existente')
+      }
       onCreated({
         id:         data.id,
         nombre:     nombre.trim(),

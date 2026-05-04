@@ -293,13 +293,32 @@ export function BotonesPDF({
                       <li className="list-disc text-amber-600">y {faltantes.length - 4} más…</li>
                     )}
                   </ul>
-                  <button
-                    type="button"
-                    onClick={() => setForzar(prev => ({ ...prev, [b.key]: true }))}
-                    className="mt-2 text-[10px] text-amber-700 hover:text-amber-900 underline font-medium"
-                  >
-                    Generar de todos modos
-                  </button>
+                  <div className="mt-2 flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        // Scrolla a Info Técnica donde están la mayoría de los campos
+                        const target = document.querySelector('#info-tecnica')
+                        if (target) {
+                          target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                          // Si la sección está colapsada, click para expandirla
+                          const header = target.querySelector('button[aria-expanded="false"]')
+                          if (header) (header as HTMLButtonElement).click()
+                        }
+                      }}
+                      className="text-[10px] text-amber-900 hover:text-amber-950 underline font-semibold"
+                    >
+                      Llenar campos faltantes
+                    </button>
+                    <span className="text-[10px] text-amber-400">·</span>
+                    <button
+                      type="button"
+                      onClick={() => setForzar(prev => ({ ...prev, [b.key]: true }))}
+                      className="text-[10px] text-amber-700 hover:text-amber-900 underline"
+                    >
+                      Generar de todos modos
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <button

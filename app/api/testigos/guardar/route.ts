@@ -94,7 +94,30 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({ id: data.id, nombre: `${data.nombre} ${data.apellidos}` })
     } else {
-      // INSERT
+      // INSERT — pero antes deduplicar por número de INE
+      // Evita la duplicación reportada en Prueba 01 ("Ignacio Cruz Miguel" aparecía 3x).
+      if (payload.numero_ine) {
+        const { data: existente } = await supabase
+          .from('testigos')
+          .select('id, nombre, apellidos, telefono, email')
+          .eq('numero_ine', payload.numero_ine)
+          .eq('activo', true)
+          .maybeSingle()
+        if (existente) {
+          // Mejorar el registro existente con los nuevos datos no nulos (sin sobreescribir)
+          const mejoras: Record<string, any> = {}
+          if (payload.telefono && !existente.telefono) mejoras.telefono = payload.telefono
+          if (payload.email    && !existente.email)    mejoras.email    = payload.email
+          if (Object.keys(mejoras).length > 0) {
+            await supabase.from('testigos').update(mejoras).eq('id', existente.id)
+          }
+          return NextResponse.json({
+            id: existente.id,
+            nombre: `${existente.nombre} ${existente.apellidos ?? ''}`.trim(),
+            existing: true,
+          })
+        }
+      }
       payload.activo = true
       payload.creado_por = user.id
       const { data, error } = await supabase
