@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { CLAUDE_MODELS, getAnthropicClient } from '@/lib/ai'
 import { registrarCostoIA } from '@/lib/ai/cost'
 
 const PROMPT = `Eres un sistema de extracción de datos técnicos para inversores fotovoltaicos (solares).
@@ -57,15 +57,13 @@ export async function POST(req: NextRequest) {
   const buffer = Buffer.from(await file.arrayBuffer())
   const base64 = buffer.toString('base64')
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
-    return NextResponse.json({ error: 'ANTHROPIC_API_KEY no está configurada en .env.local' }, { status: 500 })
-  }
-  const anthropic = new Anthropic({ apiKey })
+  let anthropic
+  try { anthropic = getAnthropicClient() }
+  catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
 
   let rawExtracted: Record<string, unknown> | Record<string, unknown>[] = {}
   let costoUSD = 0
-  const MODELO = 'claude-opus-4-5'
+  const MODELO = CLAUDE_MODELS.OCR
   try {
     const content: any[] = []
 

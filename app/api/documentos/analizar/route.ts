@@ -1,6 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { CLAUDE_MODELS, getAnthropicClient } from '@/lib/ai'
 import { registrarCostoIA } from '@/lib/ai/cost'
 
 export async function POST(req: NextRequest) {
@@ -43,14 +43,14 @@ export async function POST(req: NextRequest) {
   const base64 = Buffer.from(fileBuffer).toString('base64')
 
   // Call Anthropic API
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) {
+  let anthropic
+  try { anthropic = getAnthropicClient() }
+  catch (e: any) {
     return NextResponse.json(
-      { error: 'ANTHROPIC_API_KEY no está configurada. Verifica .env.local y reinicia el servidor.' },
+      { error: `${e.message}. Verifica .env.local y reinicia el servidor.` },
       { status: 500 }
     )
   }
-  const anthropic = new Anthropic({ apiKey })
 
   // ── Prompts específicos por tipo de documento ────────────────
   let prompt: string
@@ -262,7 +262,7 @@ Responde ÚNICAMENTE con el JSON válido, sin texto adicional.`
 
   let analysis: any = null
   let costoUSD = 0
-  const MODELO = 'claude-opus-4-5'
+  const MODELO = CLAUDE_MODELS.ANALISIS_DOC
   try {
     // Infer mime_type from storage_path extension as fallback for documents
     // uploaded via the client portal before mime_type was saved (legacy records).

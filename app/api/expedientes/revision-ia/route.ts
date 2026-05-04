@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { CLAUDE_MODELS, getAnthropicClient } from '@/lib/ai'
 import { registrarCostoIA } from '@/lib/ai/cost'
 
 const PROMPT_REVISION = `Eres un revisor experto de expedientes de inspección de sistemas fotovoltaicos para la CRE (Comisión Reguladora de Energía) en México.
@@ -47,8 +47,9 @@ export async function POST(req: NextRequest) {
   const { expediente_id } = await req.json()
   if (!expediente_id) return NextResponse.json({ error: 'expediente_id requerido' }, { status: 400 })
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
-  if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY no configurada' }, { status: 500 })
+  let anthropic
+  try { anthropic = getAnthropicClient() }
+  catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
 
   const db = await createServiceClient()
 
@@ -71,8 +72,6 @@ export async function POST(req: NextRequest) {
   if (!docs?.length) {
     return NextResponse.json({ error: 'No hay documentos en este expediente' }, { status: 400 })
   }
-
-  const anthropic = new Anthropic({ apiKey })
 
   // Contexto del expediente (sin documentos)
   const contexto = `
@@ -157,7 +156,7 @@ ${docs.map((d: any, i: number) => `  ${i + 1}. [${d.tipo}] "${d.nombre}" — sub
   // Llamar a Claude
   let resultado: any = null
   let costoUSD = 0
-  const MODELO = 'claude-opus-4-5'
+  const MODELO = CLAUDE_MODELS.ANALISIS_DOC
   try {
     const msg = await anthropic.messages.create({
       model: MODELO,

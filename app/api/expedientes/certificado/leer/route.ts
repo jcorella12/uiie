@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { CLAUDE_MODELS, getAnthropicClient } from '@/lib/ai'
 import { registrarCostoIA } from '@/lib/ai/cost'
 
 const AI_PROMPT = `Eres un extractor de datos de certificados de la CNE (Comisión Nacional de Energía) de México.
@@ -50,9 +50,11 @@ export async function POST(req: NextRequest) {
   const arrayBuffer = await file.arrayBuffer()
   const base64      = Buffer.from(arrayBuffer).toString('base64')
 
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  let anthropic
+  try { anthropic = getAnthropicClient() }
+  catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
 
-  const MODELO = 'claude-opus-4-5'
+  const MODELO = CLAUDE_MODELS.CERTIFICADOS
   try {
     const message = await anthropic.messages.create({
       model:      MODELO,

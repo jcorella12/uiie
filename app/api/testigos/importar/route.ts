@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { CLAUDE_MODELS, getAnthropicClient } from '@/lib/ai'
 import { registrarCostoIA } from '@/lib/ai/cost'
-
-const anthropic = new Anthropic()
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -106,7 +104,10 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Paso 1: Extracción con IA ──────────────────────────────────────────────
-    const MODELO = 'claude-opus-4-5'
+    let anthropic
+    try { anthropic = getAnthropicClient() }
+    catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
+    const MODELO = CLAUDE_MODELS.IMPORT_BATCH
     const message = await anthropic.messages.create({
       model: MODELO,
       max_tokens: 4096,

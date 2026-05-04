@@ -1,6 +1,6 @@
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { CLAUDE_MODELS, getAnthropicClient } from '@/lib/ai'
 import { registrarCostoIA } from '@/lib/ai/cost'
 
 // ─── Prompt para imágenes (un solo lado) ──────────────────────────────────────
@@ -148,8 +148,10 @@ export async function POST(req: NextRequest) {
   const buffer      = Buffer.from(arrayBuffer)
   const base64      = buffer.toString('base64')
 
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  const MODELO = 'claude-opus-4-5'
+  let anthropic
+  try { anthropic = getAnthropicClient() }
+  catch (e: any) { return NextResponse.json({ error: e.message }, { status: 500 }) }
+  const MODELO = CLAUDE_MODELS.OCR
 
   // ── OCR con Claude ───────────────────────────────────────────────────────────
   let ladoDetectado: string = ladoInput ?? 'frente'

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import Anthropic from '@anthropic-ai/sdk'
+import { CLAUDE_MODELS, getAnthropicClient } from '@/lib/ai'
 import { registrarCostoIA } from '@/lib/ai/cost'
 
 const CRE_BOVEDA = 'https://cre-boveda.azurewebsites.net/Api/Documento'
@@ -99,11 +99,11 @@ export async function POST(req: NextRequest) {
   // ── 3. Leer con IA ────────────────────────────────────────────────────────────
   let aiData: Record<string, any> = {}
   let costoUSD = 0
-  const MODELO = 'claude-opus-4-5'
+  const MODELO = CLAUDE_MODELS.CERTIFICADOS
 
   if (tipo === 'certificado') {
     try {
-      const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+      const anthropic = getAnthropicClient()
       const message = await anthropic.messages.create({
         model:      MODELO,
         max_tokens: 512,
