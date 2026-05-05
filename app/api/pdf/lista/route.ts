@@ -10,6 +10,19 @@ function getLogoPath(): string | undefined {
   return fs.existsSync(p) ? p : undefined
 }
 
+async function loadHomologacionRedaccion(
+  db: any, marca: string | null | undefined
+): Promise<string | undefined> {
+  if (!marca) return undefined
+  const { data } = await db
+    .from('inversor_homologaciones')
+    .select('redaccion_lista')
+    .ilike('marca', marca)
+    .eq('vigente', true)
+    .maybeSingle()
+  return data?.redaccion_lista ?? undefined
+}
+
 function fmtFecha(iso: string): string {
   return new Date(iso).toLocaleDateString('es-MX', {
     year: 'numeric', month: 'long', day: 'numeric',
@@ -101,6 +114,7 @@ export async function GET(req: NextRequest) {
     marca_inversor:         inv?.marca ?? '—',
     modelo_inversor:        inv?.modelo ?? '—',
     certificacion_inversor: inv?.certificacion ?? 'ul1741',
+    homologacion_redaccion: await loadHomologacionRedaccion(supabase, inv?.marca),
 
     // Subestación
     capacidad_subestacion_kva: exp.capacidad_subestacion_kva ?? undefined,

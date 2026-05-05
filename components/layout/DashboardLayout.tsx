@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { UserRole } from '@/lib/types'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
+import FeedbackFAB from '@/components/feedback/FeedbackFAB'
 import { Info, Menu } from 'lucide-react'
 
 interface DashboardLayoutProps {
@@ -115,6 +116,7 @@ export default function DashboardLayout({ children, rol, nombre }: DashboardLayo
       </div>
 
       <VersionBadge />
+      <FeedbackFAB />
     </div>
   )
 }

@@ -94,7 +94,8 @@ function detectSpecialType(file: File): SpecialType {
   const n = file.name.toLowerCase()
   if (/\b(ine|ife)\b|credencial|identificac|pasaporte/.test(n)) return 'ine'
   if (/\b(inversor|inverter|panel|modulo|módulo)\b|ficha.tecnica|datasheet|cert.inv/.test(n)) return 'inversor_cert'
-  if (/recibo|estado.cuenta|factura.*cfe|cfe.*factura|recibo.*luz|luz.*cfe/.test(n)) return 'recibo_cfe'
+  // Recibo CFE o foto/placa del medidor — ambos disparan el flujo de extracción de medidor
+  if (/recibo|estado.cuenta|factura.*cfe|cfe.*factura|recibo.*luz|luz.*cfe|\bmedidor\b|placa.*medidor|medidor.*bidireccional|num.*serie.*medidor|n[ºo°.]?\s*medidor/.test(n)) return 'recibo_cfe'
   return 'none'
 }
 
@@ -174,7 +175,8 @@ function INEItem({ qf, onRemove, onUpdate }: {
       const res  = await fetch('/api/testigos/importar-ines', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al procesar')
-      const p = data.participants?.[0]
+      // Backend responde con `participantes` (es) — soportar también `participants` por compat
+      const p = (data.participantes ?? data.participants)?.[0]
       if (!p) throw new Error('No se pudo extraer información de la identificación')
       onUpdate({ ineProcessing: false, ineData: p, ineStorageKey: p._storageKey })
     } catch (err: any) {
@@ -191,7 +193,8 @@ function INEItem({ qf, onRemove, onUpdate }: {
       const res = await fetch('/api/testigos/importar-json', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ participants: [{ ...qf.ineData, rol: 'testigo', _storageKey: qf.ineStorageKey }] }),
+        // El backend espera "participantes" (es), no "participants"
+        body: JSON.stringify({ participantes: [{ ...qf.ineData, rol: 'testigo', _storageKey: qf.ineStorageKey }] }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al guardar')
@@ -509,7 +512,9 @@ function ReciboCFEItem({ qf, expedienteId, onRemove, onUpdate, onRefresh }: {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-xs font-medium text-gray-700 truncate">{qf.file.name}</p>
-          <p className="text-[10px] text-teal-600 font-medium">Recibo CFE detectado — se extraerá el número de medidor</p>
+          <p className="text-[10px] text-teal-600 font-medium">
+            Recibo CFE / foto de medidor detectado — ¿extraer el número?
+          </p>
         </div>
         {!qf.reciboSaved
           ? <button onClick={onRemove} className="text-gray-300 hover:text-red-400"><X className="w-4 h-4" /></button>
@@ -590,17 +595,25 @@ function ReciboCFEItem({ qf, expedienteId, onRemove, onUpdate, onRefresh }: {
       )}
 
       {qf.reciboSaved && qf.reciboNumero && (
-        <div className="flex items-center gap-3">
-          <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-          <p className="text-xs text-green-700 font-semibold">
-            Número guardado: <span className="font-mono">{qf.reciboNumero}</span>
-          </p>
+        <div className="rounded-lg bg-emerald-100 border border-emerald-200 px-3 py-2 flex items-start gap-2">
+          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+          <div className="text-xs">
+            <p className="text-emerald-800 font-semibold">
+              ✓ Aplicado a Información Técnica
+            </p>
+            <p className="text-emerald-700 mt-0.5">
+              Número de medidor: <span className="font-mono">{qf.reciboNumero}</span>
+            </p>
+            <p className="text-emerald-600/80 text-[10px] mt-0.5">
+              El checklist se actualizó. Puedes verlo en la sección "Información Técnica" del expediente.
+            </p>
+          </div>
         </div>
       )}
 
       {qf.reciboSaved && !qf.reciboNumero && (
         <p className="text-xs text-green-700 flex items-center gap-1">
-          <CheckCircle className="w-3.5 h-3.5" /> Recibo subido como documento (sin extracción de medidor)
+          <CheckCircle className="w-3.5 h-3.5" /> Subido como documento (sin extracción)
         </p>
       )}
     </div>
@@ -609,15 +622,64 @@ function ReciboCFEItem({ qf, expedienteId, onRemove, onUpdate, onRefresh }: {
 
 // ─── Normal / IA-key item ─────────────────────────────────────────────────────
 
-function NormalItem({ qf, onChange, onCustomName, onRemove }: {
+function NormalItem({ qf, expedienteId, onChange, onCustomName, onRemove, onUpdate, onRefresh }: {
   qf: QueueFile
+  expedienteId: string
   onChange: (t: DocumentoTipo) => void
   onCustomName: (n: string) => void
   onRemove: () => void
+  onUpdate: (u: Partial<QueueFile>) => void
+  onRefresh: () => void
 }) {
   const isKey = qf.specialType === 'ia_key'
   const requireCustomName = qf.tipo === 'otro'
   const customNameMissing = requireCustomName && !qf.customNombre?.trim()
+  // Extracción de medidor opcional cuando es foto y se eligió evidencia/fotografia
+  const ofrecerMedidor =
+    qf.file.type.startsWith('image/') &&
+    (qf.tipo === 'fotografia' || qf.tipo === 'evidencia_visita') &&
+    qf.status === 'pending' && !qf.applied
+
+  async function handleExtraerMedidor() {
+    onUpdate({ reciboProcessing: true, error: undefined })
+    try {
+      const fd = new FormData()
+      fd.append('file', qf.file)
+      fd.append('expediente_id', expedienteId)
+      const r = await fetch('/api/ocr/medidor', { method: 'POST', body: fd })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error ?? 'No se pudo extraer')
+      onUpdate({
+        reciboProcessing: false,
+        reciboNumero:    data.numero_medidor ?? null,
+        reciboConfianza: data.confianza ?? '',
+        error: data.numero_medidor ? undefined : 'No se encontró número de medidor en la foto',
+      })
+    } catch (e: any) {
+      onUpdate({ reciboProcessing: false, error: e.message })
+    }
+  }
+
+  async function handleConfirmarMedidor() {
+    if (!qf.reciboNumero?.trim()) return
+    onUpdate({ reciboProcessing: true })
+    try {
+      const r = await fetch('/api/expedientes/guardar', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expediente_id: expedienteId,
+          numero_medidor: qf.reciboNumero.trim(),
+        }),
+      })
+      const data = await r.json()
+      if (!r.ok) throw new Error(data.error ?? 'No se pudo guardar')
+      onUpdate({ reciboProcessing: false, reciboSaved: true })
+      onRefresh()
+    } catch (e: any) {
+      onUpdate({ reciboProcessing: false, error: e.message })
+    }
+  }
 
   return (
     <div className={`py-2.5 px-3 rounded-xl border transition-colors ${
@@ -684,6 +746,62 @@ function NormalItem({ qf, onChange, onCustomName, onRemove }: {
             </p>
           )}
         </div>
+      )}
+
+      {/* Extracción opcional de medidor para fotos (fotografia / evidencia_visita) */}
+      {ofrecerMedidor && !qf.reciboNumero && !qf.reciboSaved && !qf.reciboProcessing && (
+        <button
+          type="button"
+          onClick={handleExtraerMedidor}
+          className="mt-2 w-full inline-flex items-center justify-center gap-1.5 px-3 py-1.5 bg-teal-50 border border-teal-200 text-teal-700 text-xs font-semibold rounded-lg hover:bg-teal-100"
+        >
+          <Sparkles className="w-3.5 h-3.5" />
+          ¿Es foto del medidor? Extraer número con IA
+        </button>
+      )}
+      {qf.reciboProcessing && (
+        <div className="mt-2 flex items-center gap-2 text-xs text-teal-700">
+          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Procesando…
+        </div>
+      )}
+      {qf.reciboNumero && !qf.reciboSaved && !qf.reciboProcessing && (
+        <div className="mt-2 space-y-2">
+          <p className="text-[11px] text-teal-800">
+            La IA detectó este número. Verifica y confirma para aplicarlo a Información Técnica:
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              value={qf.reciboNumero ?? ''}
+              onChange={e => onUpdate({ reciboNumero: e.target.value, error: undefined })}
+              className="flex-1 px-3 py-1.5 rounded-lg border border-teal-300 text-sm font-mono bg-white focus:outline-none focus:ring-1 focus:ring-teal-500"
+              placeholder="Número de medidor"
+            />
+            <button
+              type="button"
+              onClick={handleConfirmarMedidor}
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-teal-600 text-white text-xs font-semibold rounded-lg hover:bg-teal-700"
+            >
+              <CheckCircle className="w-3.5 h-3.5" /> Aplicar
+            </button>
+          </div>
+        </div>
+      )}
+      {qf.reciboSaved && qf.reciboNumero && (
+        <div className="mt-2 rounded-lg bg-emerald-100 border border-emerald-200 px-3 py-2 flex items-start gap-2">
+          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+          <div className="text-xs">
+            <p className="text-emerald-800 font-semibold">✓ Aplicado a Información Técnica</p>
+            <p className="text-emerald-700 mt-0.5">
+              Número de medidor: <span className="font-mono">{qf.reciboNumero}</span>
+            </p>
+          </div>
+        </div>
+      )}
+      {qf.error && qf.reciboNumero === undefined && qf.reciboProcessing === false && qf.specialType === 'none' && (
+        <p className="mt-2 text-[10px] text-red-600 flex items-center gap-1">
+          <AlertTriangle className="w-3 h-3" /> {qf.error}
+        </p>
       )}
     </div>
   )
@@ -861,9 +979,12 @@ export default function SubirDocumentosMasivo({ expedienteId }: Props) {
                   <NormalItem
                     key={qf.id}
                     qf={qf}
+                    expedienteId={expedienteId}
                     onChange={t => changeTipo(qf.id, t)}
                     onCustomName={n => updateItem(qf.id, { customNombre: n })}
                     onRemove={() => removeItem(qf.id)}
+                    onUpdate={u => updateItem(qf.id, u)}
+                    onRefresh={() => router.refresh()}
                   />
                 ))}
               </div>

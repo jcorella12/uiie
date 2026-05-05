@@ -16,7 +16,7 @@ Formato de cada objeto:
   "potencia_kw": number (potencia nominal de salida en kW — si el nombre del modelo tiene el número, úsalo: MIN 5000TL-X = 5.0),
   "fase": "monofasico" | "trifasico" | "bifasico",
   "tipo": "string" | "microinversor" | "hibrido",
-  "certificacion": "ul1741" | "ieee1547" | "ninguna",
+  "certificacion": "ul1741" | "ieee1547" | "homologado_cne" | "ninguna",
   "eficiencia": number | null,
   "tension_ac": number | null,
   "corriente_max": number | null,
@@ -28,7 +28,7 @@ Reglas:
 - Para potencia_kw: extráela del nombre del modelo si no aparece explícita (2500 → 2.5, 5000 → 5.0, 6000 → 6.0).
 - Para "fase": monofasico si es 1-fase/1-phase/TL (string/single), trifasico si es 3-fase/3-phase/TL3.
 - Para "tipo": string si es inversor string normal, microinversor, hibrido si tiene batería.
-- Para "certificacion": ul1741 si ves UL 1741, ieee1547 si ves IEEE 1547, ninguna si no aparece.
+- Para "certificacion": ul1741 si ves UL 1741, ieee1547 si ves IEEE 1547, ninguna si no aparece. Para Huawei usa "homologado_cne" (oficio CNE F00.06.UE/225/2026 los homologa a UL 1741 en México).
 - Para "tipo_doc": certificado si es Authorization to Mark / UL listing / certificación. ficha_tecnica si es datasheet.
 
 Responde ÚNICAMENTE con el JSON válido (objeto o array), sin texto adicional ni markdown.`
@@ -121,6 +121,24 @@ export async function POST(req: NextRequest) {
   const extractedList: Record<string, unknown>[] = Array.isArray(rawExtracted)
     ? rawExtracted
     : [rawExtracted]
+
+  // Override automático: si el inversor es de una marca con homologación CNE
+  // vigente (ej. Huawei), forzamos certificacion='homologado_cne' aunque la
+  // ficha técnica diga UL/IEEE — el documento oficial CNE manda.
+  const dbCheck = await createServiceClient()
+  const { data: marcasHomologadas } = await dbCheck
+    .from('inversor_homologaciones')
+    .select('marca')
+    .eq('vigente', true)
+  const marcasSet = new Set(
+    (marcasHomologadas ?? []).map(m => String(m.marca).toLowerCase().trim())
+  )
+  for (const ext of extractedList) {
+    const marca = String(ext.marca ?? '').toLowerCase().trim()
+    if (marcasSet.has(marca)) {
+      ext.certificacion = 'homologado_cne'
+    }
+  }
 
   // Check for existing inversores for each model
   const db = await createServiceClient()

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 
 export async function POST(req: NextRequest) {
   try {
@@ -94,10 +94,14 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({ id: data.id, nombre: `${data.nombre} ${data.apellidos}` })
     } else {
-      // INSERT — pero antes deduplicar por número de INE
-      // Evita la duplicación reportada en Prueba 01 ("Ignacio Cruz Miguel" aparecía 3x).
+      // INSERT — pero antes deduplicar por número de INE.
+      // Usa service role para detectar duplicados creados por OTROS inspectores
+      // (la RLS escópea por usuario, así que con el cliente normal no los vería).
+      // Si hay match, devolvemos el existente: el frontend lo asigna a un
+      // expediente del usuario actual y a partir de ahí ambos lo ven (RLS).
       if (payload.numero_ine) {
-        const { data: existente } = await supabase
+        const svc = await createServiceClient()
+        const { data: existente } = await svc
           .from('testigos')
           .select('id, nombre, apellidos, telefono, email')
           .eq('numero_ine', payload.numero_ine)
@@ -109,7 +113,7 @@ export async function POST(req: NextRequest) {
           if (payload.telefono && !existente.telefono) mejoras.telefono = payload.telefono
           if (payload.email    && !existente.email)    mejoras.email    = payload.email
           if (Object.keys(mejoras).length > 0) {
-            await supabase.from('testigos').update(mejoras).eq('id', existente.id)
+            await svc.from('testigos').update(mejoras).eq('id', existente.id)
           }
           return NextResponse.json({
             id: existente.id,

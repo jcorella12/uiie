@@ -10,6 +10,7 @@ import EvidenciaVisitaSection from '@/components/expedientes/EvidenciaVisitaSect
 import CertificadoSection from '@/components/expedientes/CertificadoSection'
 import RevisionSection from '@/components/expedientes/RevisionSection'
 import EnviarRevisionCTA from '@/components/expedientes/EnviarRevisionCTA'
+import EliminarInspeccionBtn from '@/components/agenda/EliminarInspeccionBtn'
 import DescargarRespaldoZip from '@/components/expedientes/DescargarRespaldoZip'
 import CollapsibleCard from '@/components/ui/CollapsibleCard'
 import { ExpedienteProgressBar } from '@/components/expedientes/ExpedienteProgressBar'
@@ -579,7 +580,23 @@ export default async function ExpedienteDetailPage({
                             })
                           : 'Fecha pendiente'}
                       </p>
-                      <StatusBadge status={insp.status} dictionary={INSPECCION_STATUS} size="xs" />
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={insp.status} dictionary={INSPECCION_STATUS} size="xs" />
+                        <EliminarInspeccionBtn
+                          inspeccionId={insp.id}
+                          bloqueado={!!expediente.numero_certificado || expediente.status === 'cerrado' || insp.status === 'realizada'}
+                          bloqueadoMotivo={
+                            expediente.numero_certificado
+                              ? 'Certificado ya emitido en CNE'
+                              : expediente.status === 'cerrado'
+                              ? 'Expediente cerrado'
+                              : insp.status === 'realizada'
+                              ? 'Inspección ya realizada'
+                              : undefined
+                          }
+                          size="xs"
+                        />
+                      </div>
                     </div>
                     {insp.direccion && (
                       <p className="text-xs text-gray-500 mb-1.5">📍 {insp.direccion}</p>
@@ -614,6 +631,7 @@ export default async function ExpedienteDetailPage({
                     <th className="text-center py-2.5 px-2 font-medium text-gray-500">Estado</th>
                     <th className="text-left py-2.5 px-2 font-medium text-gray-500">Inspector</th>
                     <th className="text-left py-2.5 px-2 font-medium text-gray-500">Testigo</th>
+                    <th className="text-center py-2.5 px-2 font-medium text-gray-500 w-10"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -652,6 +670,21 @@ export default async function ExpedienteDetailPage({
                           {testigo
                             ? `${testigo.nombre} ${testigo.apellidos ?? ''}`.trim()
                             : <span className="text-gray-400">—</span>}
+                        </td>
+                        <td className="py-2.5 px-2 text-center">
+                          <EliminarInspeccionBtn
+                            inspeccionId={insp.id}
+                            bloqueado={!!expediente.numero_certificado || expediente.status === 'cerrado' || insp.status === 'realizada'}
+                            bloqueadoMotivo={
+                              expediente.numero_certificado
+                                ? 'Certificado ya emitido en CNE'
+                                : expediente.status === 'cerrado'
+                                ? 'Expediente cerrado'
+                                : insp.status === 'realizada'
+                                ? 'Inspección ya realizada'
+                                : undefined
+                            }
+                          />
                         </td>
                       </tr>
                     )

@@ -46,12 +46,16 @@ export default async function InversoresCatalogoPage({ searchParams }: Props) {
     string: 'String', microinversor: 'Microinversor', hibrido: 'Híbrido',
   }
   const CERT_BADGE: Record<string, string> = {
-    ul1741:  'bg-green-100 text-green-800',
-    ieee1547:'bg-orange-100 text-orange-800',
-    ninguna: 'bg-gray-100 text-gray-500',
+    ul1741:        'bg-green-100  text-green-800',
+    homologado_cne:'bg-emerald-100 text-emerald-800',
+    ieee1547:      'bg-orange-100 text-orange-800',
+    ninguna:       'bg-gray-100   text-gray-500',
   }
   const CERT_LABEL: Record<string, string> = {
-    ul1741: 'UL1741 ✓', ieee1547: 'IEEE 1547', ninguna: 'Sin cert',
+    ul1741: 'UL1741 ✓',
+    homologado_cne: 'Homologado a UL (CNE)',
+    ieee1547: 'IEEE 1547',
+    ninguna: 'Sin cert',
   }
   const FASE_LABEL: Record<string, string> = {
     monofasico: '1F', bifasico: '2F', trifasico: '3F',
@@ -101,6 +105,7 @@ export default async function InversoresCatalogoPage({ searchParams }: Props) {
           className="input-field py-1.5 text-sm pr-8">
           <option value="todos">Todas las certificaciones</option>
           <option value="ul1741">UL1741</option>
+          <option value="homologado_cne">Homologado a UL (CNE)</option>
           <option value="ieee1547">IEEE 1547</option>
           <option value="ninguna">Sin certificación</option>
         </select>

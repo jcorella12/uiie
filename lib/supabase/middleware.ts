@@ -54,9 +54,15 @@ export async function updateSession(request: NextRequest) {
     const rol: string = meta?.rol ?? 'inspector'
     const url = request.nextUrl.clone()
 
-    // Rutas exclusivas de admin — bloquear a inspectores y clientes
+    // Rutas exclusivas de admin — bloquear a inspectores y clientes.
+    // Algunas subrutas de /dashboard/admin son catálogos COMPARTIDOS con
+    // inspectores (testigos, inversores) — esos pasan.
     const esAdmin = ['admin', 'inspector_responsable'].includes(rol)
-    if (!esAdmin && (
+    const esCompartido =
+      pathname.startsWith('/dashboard/admin/testigos') ||
+      pathname.startsWith('/dashboard/admin/inversores')
+
+    if (!esAdmin && !esCompartido && (
       pathname.startsWith('/dashboard/admin') ||
       pathname.startsWith('/dashboard/conciliacion') ||
       pathname.startsWith('/dashboard/reporte-trimestral') ||

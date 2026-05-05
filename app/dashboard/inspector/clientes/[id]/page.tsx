@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { formatDate, formatDateShort } from '@/lib/utils'
 import ClienteForm from '@/components/clientes/ClienteForm'
 import INECaptura from '@/components/ocr/INECaptura'
+import ClienteINEsAdicionales from '@/components/clientes/ClienteINEsAdicionales'
 import PortalAccesoButtons from '@/components/clientes/PortalAccesoButtons'
 import {
   ArrowLeft,
@@ -76,6 +77,13 @@ export default async function ClienteDetailPage({
     .eq('cliente_id', params.id)
     .order('created_at', { ascending: false })
     .limit(10)
+
+  // INEs adicionales del cliente (firmante alterno, esposo/a, representante, etc.)
+  const { data: inesAdicionales } = await supabase
+    .from('cliente_ines')
+    .select('id, etiqueta, nombre_completo, numero_ine, curp, domicilio, ine_url_frente, ine_url_reverso, notas, created_at')
+    .eq('cliente_id', params.id)
+    .order('created_at', { ascending: true })
 
   const esPersonaMoral = cliente.tipo_persona === 'moral'
   const direccionCompleta = [
@@ -302,7 +310,7 @@ export default async function ClienteDetailPage({
         <details className="card p-0 overflow-hidden group">
           <summary className="cursor-pointer px-6 py-4 font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 transition-colors select-none flex items-center justify-between list-none">
             <span className="flex items-center gap-2">
-              Credencial INE / IFE
+              Credencial INE / IFE (principal)
               {cliente.ocr_nombre && (
                 <span className="text-xs font-normal text-green-600 bg-green-50 border border-green-200 rounded-full px-2 py-0.5">
                   Escaneada
@@ -328,6 +336,24 @@ export default async function ClienteDetailPage({
           </div>
         </details>
       )}
+
+      {/* INEs adicionales del proyecto (representante, esposo/a, hijo, etc.) */}
+      <details className="card p-0 overflow-hidden group" open={(inesAdicionales ?? []).length > 0}>
+        <summary className="cursor-pointer px-6 py-4 font-semibold text-gray-700 bg-gray-50 hover:bg-gray-100 transition-colors select-none flex items-center justify-between list-none">
+          <span className="flex items-center gap-2">
+            INEs adicionales del proyecto
+            {(inesAdicionales ?? []).length > 0 && (
+              <span className="text-xs font-normal text-brand-green bg-brand-green-light/40 border border-brand-green/20 rounded-full px-2 py-0.5">
+                {inesAdicionales!.length}
+              </span>
+            )}
+          </span>
+          <ChevronRight className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" />
+        </summary>
+        <div className="p-6 border-t border-gray-100">
+          <ClienteINEsAdicionales clienteId={cliente.id} ines={(inesAdicionales ?? []) as any} />
+        </div>
+      </details>
 
       {/* Editar — collapsible */}
       <details className="card p-0 overflow-hidden group">

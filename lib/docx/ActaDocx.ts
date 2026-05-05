@@ -61,8 +61,10 @@ export interface ActaData {
   num_inversores: number
   marca_inversor: string
   modelo_inversor: string
-  certificacion_inversor: 'ul1741' | 'ieee1547' | 'ninguna'
+  certificacion_inversor: 'ul1741' | 'ieee1547' | 'homologado_cne' | 'ninguna'
   justificacion_ieee1547?: string
+  /** Texto largo de homologación CNE (solo cuando certificacion_inversor='homologado_cne') */
+  homologacion_redaccion?: string
   capacidad_subestacion_kva?: number
   tiene_i1_i2: boolean
   tiene_interruptor_exclusivo: boolean
@@ -154,6 +156,18 @@ function textoInversor(d: ActaData): string {
       `${plural ? `LOS ${n} INVERSORES ${marca} ${modelo} CUENTAN CON` : `EL INVERSOR ${marca} ${modelo} CUENTA CON`} ` +
       `certificado internacional UL1741 por lo cual CUMPLE con los requerimientos establecidos en las DACGS para interconexión a la red. ` +
       `${plural ? 'Los inversores cuentan con' : 'El inversor cuenta con'} certificados emitidos por laboratorios extranjeros o nacionales, los cuales demuestran el cumplimiento con las características para interconexión.`
+    )
+  }
+  if (d.certificacion_inversor === 'homologado_cne') {
+    // Si el endpoint pasó la redacción ya armada (de la tabla inversor_homologaciones), usarla
+    if (d.homologacion_redaccion) return d.homologacion_redaccion
+    // Fallback genérico
+    return (
+      `${plural ? `LOS ${n} INVERSORES ${marca} ${modelo}` : `EL INVERSOR ${marca} ${modelo}`} ` +
+      `está HOMOLOGADO A UL 1741 mediante el oficio F00.06.UE/225/2026 emitido por la Comisión Nacional de Energía (CNE) ` +
+      `el 28 de enero de 2026, en el cual se acredita el cumplimiento de los parámetros de la Tabla 5 de la RES/142/2017 ` +
+      `mediante reportes de pruebas operativas conforme a IEEE 1547 e IEC 61727. ` +
+      `Por lo anterior CUMPLE con los requerimientos establecidos en las DACGS para interconexión a la red.`
     )
   }
   if (d.certificacion_inversor === 'ieee1547') {
@@ -478,8 +492,12 @@ export async function generarActaDocx(datos: ActaData): Promise<Buffer> {
     boldRun(idAtiende),
     run(', en su carácter de Representante (o cargo de la persona), se le hace saber el derecho que tiene de designar dos testigos para que corroboren lo actuado durante la inspección, los que en su negativa serán designados por el inspector, o se asentará la falta de los mismos y la causa si se diera el caso. Los testigos designados por el Representante para la Inspección son '),
     boldRun(datos.testigo1_nombre),
+    run(', con domicilio en '),
+    boldRun(datos.testigo1_direccion ?? '—'),
     run(' y '),
     boldRun(datos.testigo2_nombre),
+    run(', con domicilio en '),
+    boldRun(datos.testigo2_direccion ?? '—'),
     run(' quien se identifica con Credencial para votar '),
     boldRun(datos.testigo1_numero_ine),
     run(' y '),

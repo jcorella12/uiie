@@ -58,13 +58,15 @@ export default async function InversoresPage({ searchParams }: Props) {
   }
 
   const CERT_BADGE: Record<string, string> = {
-    ul1741: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800',
-    ieee1547: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800',
-    ninguna: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800',
+    ul1741:         'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100   text-green-800',
+    homologado_cne: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800',
+    ieee1547:       'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-orange-100  text-orange-800',
+    ninguna:        'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100     text-red-800',
   }
 
   const CERT_LABEL: Record<string, string> = {
     ul1741: 'UL1741 ✓',
+    homologado_cne: 'Homologado a UL (CNE)',
     ieee1547: 'IEEE 1547',
     ninguna: 'Sin cert',
   }

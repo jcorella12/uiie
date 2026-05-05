@@ -1,4 +1,4 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
@@ -104,6 +104,25 @@ export async function POST(req: NextRequest) {
         .eq('usuario_id', user.id)
       if ((count ?? 0) > 0) {
         return NextResponse.json({ error: 'Ya tienes un cliente vinculado' }, { status: 409 })
+      }
+    }
+
+    // Dedup por RFC para staff: si otro inspector ya creó un cliente con
+    // el mismo RFC, devolvemos ese registro en lugar de duplicar. Service
+    // role para ver fuera del scope RLS del usuario actual.
+    if (esStaff && cleanFields.rfc) {
+      const svc = await createServiceClient()
+      const { data: existente } = await svc
+        .from('clientes')
+        .select('id, nombre')
+        .eq('rfc', String(cleanFields.rfc).toUpperCase().trim())
+        .maybeSingle()
+      if (existente) {
+        return NextResponse.json({
+          id: existente.id,
+          nombre: existente.nombre,
+          existing: true,
+        })
       }
     }
 

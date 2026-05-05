@@ -41,7 +41,9 @@ export interface ListaData {
   num_inversores: number
   marca_inversor: string
   modelo_inversor: string
-  certificacion_inversor: 'ul1741' | 'ieee1547' | 'ninguna'
+  certificacion_inversor: 'ul1741' | 'ieee1547' | 'homologado_cne' | 'ninguna'
+  /** Texto largo de homologación CNE para sustituir la celda de UL */
+  homologacion_redaccion?: string
   capacidad_subestacion_kva?: number
   resultado: 'aprobado' | 'rechazado' | 'condicionado'
 }
@@ -181,7 +183,9 @@ function buildFilas(d: ListaData): Fila[] {
       ? 'UL1741'
       : d.certificacion_inversor === 'ieee1547'
         ? 'IEEE 1547'
-        : ''
+        : d.certificacion_inversor === 'homologado_cne'
+          ? 'HOMOLOGADO A UL (CNE oficio F00.06.UE/225/2026)'
+          : ''
 
   const invPlural = d.num_inversores > 1
   const invDesc = invPlural
@@ -221,9 +225,11 @@ function buildFilas(d: ListaData): Fila[] {
         'Inversor Cuenta con la certificación UL o cumple con los requerimientos establecidos en las DACGS',
       cumple: d.certificacion_inversor !== 'ninguna',
       observacion:
-        d.certificacion_inversor !== 'ninguna'
-          ? `${invDesc} con certificación ${certLabel} por lo cual cumple. El inversor cuenta con certificados emitidos por laboratorios extranjeros, los cuales demuestran el cumplimiento con las características para interconexión.`
-          : `El inversor ${d.marca_inversor} ${d.modelo_inversor} no cuenta con certificación UL1741 ni IEEE 1547. No Cumple.`,
+        d.certificacion_inversor === 'homologado_cne'
+          ? (d.homologacion_redaccion ?? `${invDesc} con homologación oficial a UL 1741 reconocida por la Comisión Nacional de Energía mediante el oficio F00.06.UE/225/2026 del 28 de enero de 2026, en el cual se acreditan las pruebas de la Tabla 5 de la RES/142/2017 mediante reportes IEEE 1547 e IEC 61727. Por lo cual CUMPLE.`)
+          : d.certificacion_inversor !== 'ninguna'
+            ? `${invDesc} con certificación ${certLabel} por lo cual cumple. El inversor cuenta con certificados emitidos por laboratorios extranjeros, los cuales demuestran el cumplimiento con las características para interconexión.`
+            : `El inversor ${d.marca_inversor} ${d.modelo_inversor} no cuenta con certificación UL1741 ni IEEE 1547. No Cumple.`,
     },
     {
       inciso: '1.5',

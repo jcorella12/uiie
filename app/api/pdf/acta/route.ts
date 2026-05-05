@@ -16,6 +16,49 @@ function fmtFecha(iso: string): string {
   })
 }
 
+/**
+ * Si la marca del inversor tiene homologación CNE vigente, devuelve la
+ * redacción precargada en `inversor_homologaciones` (acta o lista).
+ * Útil para inyectar el texto largo del oficio CNE en los documentos
+ * generados sin que el inspector tenga que copiar/pegar.
+ */
+async function loadHomologacionRedaccion(
+  db: any, marca: string | null | undefined, doc: 'acta' | 'lista'
+): Promise<string | undefined> {
+  if (!marca) return undefined
+  const col = doc === 'acta' ? 'redaccion_acta' : 'redaccion_lista'
+  const { data } = await db
+    .from('inversor_homologaciones')
+    .select(col)
+    .ilike('marca', marca)
+    .eq('vigente', true)
+    .maybeSingle()
+  return data?.[col] ?? undefined
+}
+
+/**
+ * Construye una dirección completa para el acta:
+ *   "Calle Tal #123, COL Centro, CP 80000, Culiacán, Sinaloa"
+ *
+ * Si los campos estructurados (colonia/cp/ciudad/estado) están vacíos,
+ * cae al campo libre `domicilio` o `ocr_domicilio` que viene de la INE.
+ */
+function construirDireccionCompleta(t: any): string | undefined {
+  if (!t) return undefined
+  const partes: string[] = []
+  // Calle/número
+  const calle = t.direccion ?? t.domicilio
+  if (calle) partes.push(String(calle).trim())
+  if (t.colonia) partes.push(`COL ${String(t.colonia).trim()}`)
+  if (t.cp)      partes.push(`CP ${String(t.cp).trim()}`)
+  if (t.ciudad)  partes.push(String(t.ciudad).trim())
+  if (t.estado)  partes.push(String(t.estado).trim())
+  if (partes.length > 0) return partes.join(', ')
+  // Fallback: el OCR concatena calle + colonia + CP + municipio + estado en una línea
+  if (t.ocr_domicilio) return String(t.ocr_domicilio).trim()
+  return undefined
+}
+
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -38,7 +81,11 @@ export async function GET(req: NextRequest) {
       ),
       testigos:expediente_testigos(
         orden,
-        testigo:testigos(nombre, apellidos, numero_ine, direccion, domicilio, ocr_domicilio)
+        testigo:testigos(
+          nombre, apellidos, numero_ine,
+          direccion, domicilio, colonia, cp, ciudad, estado,
+          ocr_domicilio
+        )
       )
     `)
     .eq('id', id)
@@ -122,15 +169,17 @@ export async function GET(req: NextRequest) {
     atiende_identificacion: 'Instituto Nacional Electoral (INE)',
     atiende_numero_id: cliente?.atiende_numero_ine ?? '—',
 
-    // Testigos — numero_ine y dirección (preferir domicilio o ocr_domicilio del INE)
+    // Testigos — numero_ine y dirección completa (calle/núm + colonia + CP + ciudad + estado).
+    // Se construye con todos los campos disponibles; si solo hay calle, usa
+    // direccion/domicilio/ocr_domicilio como fallback.
     testigo1_nombre:      t1 ? `${t1.nombre} ${t1.apellidos ?? ''}`.trim() : '—',
     testigo1_numero_ine:  t1?.numero_ine ?? '—',
     testigo1_identificacion: 'Instituto Nacional Electoral (INE)',
-    testigo1_direccion:   t1?.direccion ?? t1?.domicilio ?? t1?.ocr_domicilio ?? undefined,
+    testigo1_direccion:   construirDireccionCompleta(t1),
     testigo2_nombre:      t2 ? `${t2.nombre} ${t2.apellidos ?? ''}`.trim() : '—',
     testigo2_numero_ine:  t2?.numero_ine ?? '—',
     testigo2_identificacion: 'Instituto Nacional Electoral (INE)',
-    testigo2_direccion:   t2?.direccion ?? t2?.domicilio ?? t2?.ocr_domicilio ?? undefined,
+    testigo2_direccion:   construirDireccionCompleta(t2),
 
     // Cliente final (persona/empresa a quien se emite el certificado)
     cliente_nombre:       (exp as any).nombre_cliente_final ?? cliente?.nombre ?? '—',
@@ -162,6 +211,7 @@ export async function GET(req: NextRequest) {
     modelo_inversor:      inv?.modelo ?? '—',
     certificacion_inversor: inv?.certificacion ?? 'ul1741',
     justificacion_ieee1547: inv?.justificacion_ieee1547 ?? undefined,
+    homologacion_redaccion: await loadHomologacionRedaccion(supabase, inv?.marca, 'acta'),
 
     // Subestación
     capacidad_subestacion_kva: exp.capacidad_subestacion_kva ?? undefined,

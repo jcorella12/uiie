@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json()
-  const { expediente_id, fecha_hora, duracion_min, direccion, testigo_id, notas, inspector_ejecutor_id } = body
+  const { expediente_id, fecha_hora, duracion_min, direccion, testigo_id, notas, inspector_ejecutor_id, force } = body
 
   if (!fecha_hora) {
     return NextResponse.json({ error: 'La fecha y hora son obligatorias.' }, { status: 400 })
@@ -49,6 +49,24 @@ export async function POST(req: NextRequest) {
   let resolvedInspectorId = user.id
   if (esResponsable && exp.inspector_id) {
     resolvedInspectorId = exp.inspector_id
+  }
+
+  // Validar duplicados: si ya existe una inspección activa (programada/en_curso)
+  // para este expediente, avisar — el cliente puede pasar `force: true` para
+  // confirmar que sí quiere agendar otra (caso reagenda).
+  if (!force) {
+    const { data: existentes } = await supabase
+      .from('inspecciones_agenda')
+      .select('id, fecha_hora, status')
+      .eq('expediente_id', expediente_id)
+      .in('status', ['programada', 'en_curso'])
+    if (existentes && existentes.length > 0) {
+      return NextResponse.json({
+        error: 'Este expediente ya tiene una inspección activa programada',
+        codigo: 'INSPECCION_DUPLICADA',
+        existente: existentes[0],
+      }, { status: 409 })
+    }
   }
 
   // Si se especifica un inspector ejecutor diferente, verificar que existe y es inspector activo

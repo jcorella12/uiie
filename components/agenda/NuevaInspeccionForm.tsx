@@ -311,7 +311,7 @@ export default function NuevaInspeccionForm({
     // TIMESTAMPTZ asume UTC y la cita queda con 6 horas de adelanto.
     const fechaHora = `${selectedDate}T${selectedTime}:00-06:00`
 
-    try {
+    async function intentarCrear(force: boolean) {
       const res = await fetch('/api/inspecciones/nueva', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -325,10 +325,27 @@ export default function NuevaInspeccionForm({
           inspector_ejecutor_id: inspectorEjecutorId !== currentUserId
             ? inspectorEjecutorId
             : null,
+          force,
         }),
       })
+      return { res, data: await res.json() }
+    }
 
-      const data = await res.json()
+    try {
+      let { res, data } = await intentarCrear(false)
+      if (res.status === 409 && data?.codigo === 'INSPECCION_DUPLICADA') {
+        const ok = window.confirm(
+          'Este expediente ya tiene una inspección activa programada. ' +
+          '¿Quieres agendar OTRA visita adicional? ' +
+          '(Si la primera estaba mal, ciérrala antes desde el detalle del expediente)'
+        )
+        if (!ok) {
+          setError('Inspección no creada — ya existe una activa para este expediente')
+          setLoading(false)
+          return
+        }
+        ;({ res, data } = await intentarCrear(true))
+      }
       if (!res.ok) {
         setError(data.error ?? 'Error al programar la inspección.')
         setLoading(false)

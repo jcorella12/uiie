@@ -10,7 +10,7 @@ import {
   Users, Settings, LogOut, ChevronDown,
   ClipboardList, BarChart3, UserCog, Building2, BookUser,
   Cpu, Globe, FileSpreadsheet, Receipt, UsersRound, Award, X, Brain,
-  HelpCircle, Search, Home, CheckSquare,
+  HelpCircle, Search, Home, CheckSquare, MessageSquarePlus,
 } from 'lucide-react'
 import NotificationBell from './NotificationBell'
 
@@ -83,6 +83,15 @@ const NAV: Record<UserRole, NavGroup[]> = {
         { href: '/dashboard/ai-costos',          label: 'Gastos en IA',     icon: Brain },
       ],
     },
+    {
+      id: 'soporte',
+      label: 'Soporte',
+      collapsible: true,
+      defaultOpen: false,
+      items: [
+        { href: '/dashboard/admin/feedback',     label: 'Feedback de usuarios', icon: MessageSquarePlus },
+      ],
+    },
   ],
 
   // ───────────────────────────────────────────── ADMIN
@@ -128,6 +137,15 @@ const NAV: Record<UserRole, NavGroup[]> = {
         { href: '/dashboard/conciliacion/pagos', label: 'Pagos',        icon: Receipt },
         { href: '/dashboard/reporte-trimestral', label: 'Reportes',     icon: FileSpreadsheet },
         { href: '/dashboard/ai-costos',          label: 'Gastos en IA', icon: Brain },
+      ],
+    },
+    {
+      id: 'soporte',
+      label: 'Soporte',
+      collapsible: true,
+      defaultOpen: false,
+      items: [
+        { href: '/dashboard/admin/feedback',     label: 'Feedback de usuarios', icon: MessageSquarePlus },
       ],
     },
   ],

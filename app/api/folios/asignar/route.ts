@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { sendFolioAsignadoEmail } from '@/lib/sendgrid'
+import { sendFolioAsignadoEmail } from '@/lib/email'
 
 export async function POST(request: NextRequest) {
   try {
