@@ -11,24 +11,26 @@ import {
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const TIPO_LABELS: Record<DocumentoTipo, string> = {
-  contrato:           'Contrato',
-  plano:              'Diagrama Unifilar',
-  memoria_tecnica:    'Memoria de Cálculo',
-  dictamen:           'Dictamen UVIE',
-  acta:               'Acta de Inspección',
-  lista_verificacion: 'Lista de Verificación',
-  resolutivo:         'Resolutivo CFE',
-  ficha_pago:         'Ficha de Pago (Resolutivo)',
-  fotografia:         'Fotografía',
-  certificado_cre:    'Certificado CNE',
-  acuse_cre:          'Acuse CNE',
-  evidencia_visita:   'Evidencia de Visita',
-  otro:               'Otro',
+  contrato:             'Contrato',
+  plano:                'Diagrama Unifilar',
+  memoria_tecnica:      'Memoria de Cálculo',
+  dictamen:             'Dictamen UVIE',
+  acta:                 'Acta de Inspección',
+  lista_verificacion:   'Lista de Verificación',
+  paquete_actas_listas: 'Paquete Actas y Listas (Acta + Lista + Cotización + Plan)',
+  resolutivo:           'Resolutivo CFE',
+  ficha_pago:           'Ficha de Pago (Resolutivo)',
+  fotografia:           'Fotografía',
+  certificado_cre:      'Certificado CNE',
+  acuse_cre:            'Acuse CNE',
+  evidencia_visita:     'Evidencia de Visita',
+  otro:                 'Otro',
 }
 
 const IA_KEY_TIPOS: DocumentoTipo[] = ['resolutivo', 'dictamen', 'plano', 'memoria_tecnica']
 
 const TIPOS_LISTA: DocumentoTipo[] = [
+  'paquete_actas_listas',
   'acta', 'lista_verificacion', 'resolutivo', 'ficha_pago', 'dictamen',
   'plano', 'memoria_tecnica', 'contrato', 'fotografia',
   'certificado_cre', 'acuse_cre', 'otro',
@@ -79,6 +81,7 @@ interface Props {
 function smartTipo(file: File): DocumentoTipo {
   const name = file.name.toLowerCase()
   if (file.type.startsWith('image/')) return 'fotografia'
+  if (/paquete|actas.*listas|listas.*actas|acta.*lista.*cotiz|escaneo.*completo/.test(name)) return 'paquete_actas_listas'
   if (name.includes('acta'))                                  return 'acta'
   if (name.includes('unifilar') || name.includes('diagrama')) return 'plano'
   if (name.includes('memoria') || name.includes('calculo') || name.includes('cálculo')) return 'memoria_tecnica'

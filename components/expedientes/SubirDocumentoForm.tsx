@@ -6,22 +6,24 @@ import { DocumentoTipo } from '@/lib/types'
 import { Loader2, CheckCircle, AlertTriangle, UploadCloud } from 'lucide-react'
 
 const TIPO_LABELS: Record<DocumentoTipo, string> = {
-  contrato:           'Contrato',
-  plano:              'Plano',
-  memoria_tecnica:    'Memoria Técnica',
-  dictamen:           'Dictamen UVIE',
-  acta:               'Acta de Inspección (firmada)',
-  lista_verificacion: 'Lista de Verificación (firmada)',
-  resolutivo:         'Resolutivo CFE',
-  ficha_pago:         'Ficha de Pago (Resolutivo)',
-  fotografia:         'Fotografía',
-  certificado_cre:    'Certificado CNE',
-  acuse_cre:          'Acuse CNE',
-  evidencia_visita:   'Evidencia de Visita',
-  otro:               'Otro',
+  contrato:             'Contrato',
+  plano:                'Plano',
+  memoria_tecnica:      'Memoria Técnica',
+  dictamen:             'Dictamen UVIE',
+  acta:                 'Acta de Inspección (firmada)',
+  lista_verificacion:   'Lista de Verificación (firmada)',
+  paquete_actas_listas: 'Paquete Actas y Listas (Acta + Lista + Cotización + Plan)',
+  resolutivo:           'Resolutivo CFE',
+  ficha_pago:           'Ficha de Pago (Resolutivo)',
+  fotografia:           'Fotografía',
+  certificado_cre:      'Certificado CNE',
+  acuse_cre:            'Acuse CNE',
+  evidencia_visita:     'Evidencia de Visita',
+  otro:                 'Otro',
 }
 
 const TODOS_TIPOS: DocumentoTipo[] = [
+  'paquete_actas_listas',
   'acta', 'lista_verificacion', 'resolutivo', 'ficha_pago', 'dictamen',
   'contrato', 'plano', 'memoria_tecnica', 'fotografia',
   'certificado_cre', 'acuse_cre', 'otro',
