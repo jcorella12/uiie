@@ -10,6 +10,7 @@ import EvidenciaVisitaSection from '@/components/expedientes/EvidenciaVisitaSect
 import CertificadoSection from '@/components/expedientes/CertificadoSection'
 import RevisionSection from '@/components/expedientes/RevisionSection'
 import EnviarRevisionCTA from '@/components/expedientes/EnviarRevisionCTA'
+import EditarFolioBtn from '@/components/expedientes/EditarFolioBtn'
 import EliminarInspeccionBtn from '@/components/agenda/EliminarInspeccionBtn'
 import DescargarRespaldoZip from '@/components/expedientes/DescargarRespaldoZip'
 import CollapsibleCard from '@/components/ui/CollapsibleCard'
@@ -225,6 +226,9 @@ export default async function ExpedienteDetailPage({
               <span className="font-mono text-xl font-bold text-brand-green tracking-wide">
                 {folioNumero}
               </span>
+              {esAdmin && (
+                <EditarFolioBtn expedienteId={expediente.id} folioActual={folioNumero} />
+              )}
               <StatusBadge status={expediente.status} dictionary={EXPEDIENTE_STATUS} size="sm" />
             </div>
             <p className="text-lg font-semibold text-gray-900">

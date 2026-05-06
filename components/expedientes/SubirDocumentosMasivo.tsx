@@ -302,6 +302,26 @@ function InversorItem({ qf, expedienteId, onRemove, onUpdate, onRefresh }: {
     }
   }
 
+  // Solo subir el archivo (saltar análisis con IA). Útil cuando la ficha técnica
+  // tiene varios modelos y el inspector ya seleccionó el inversor manualmente.
+  async function handleSubirSinIA() {
+    onUpdate({ inversorAnalyzing: true, error: undefined })
+    try {
+      const fd = new FormData()
+      fd.append('file', qf.file)
+      fd.append('tipo', 'otro')
+      fd.append('nombre', qf.file.name.replace(/\.[^/.]+$/, '') || qf.file.name)
+      fd.append('expediente_id', expedienteId)
+      const res  = await fetch('/api/documentos/subir', { method: 'POST', body: fd })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'No se pudo subir')
+      onUpdate({ inversorAnalyzing: false, inversorSelected: true, status: 'done' })
+      onRefresh()
+    } catch (err: any) {
+      onUpdate({ inversorAnalyzing: false, error: err.message, status: 'error' })
+    }
+  }
+
   async function handleSeleccionar(inversorId: string) {
     onUpdate({ inversorAnalyzing: true })
     try {
@@ -364,10 +384,22 @@ function InversorItem({ qf, expedienteId, onRemove, onUpdate, onRefresh }: {
       </div>
 
       {!qf.inversorData && !qf.inversorSelected && (
-        <button onClick={handleAnalizar} disabled={qf.inversorAnalyzing}
-          className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 bg-amber-500 text-white text-xs font-semibold rounded-lg hover:bg-amber-600 disabled:opacity-50">
-          {qf.inversorAnalyzing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analizando con IA…</> : <><Sparkles className="w-3.5 h-3.5" /> Analizar inversor con IA</>}
-        </button>
+        <>
+          <p className="text-[11px] text-amber-800/80">
+            Si la ficha trae varios modelos y la IA podría confundirse, usa "Solo subir" y
+            selecciona manualmente el inversor en Información Técnica.
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button onClick={handleAnalizar} disabled={qf.inversorAnalyzing}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-500 text-white text-xs font-semibold rounded-lg hover:bg-amber-600 disabled:opacity-50">
+              {qf.inversorAnalyzing ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Analizando…</> : <><Sparkles className="w-3.5 h-3.5" /> Analizar con IA</>}
+            </button>
+            <button onClick={handleSubirSinIA} disabled={qf.inversorAnalyzing}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-amber-300 text-amber-700 text-xs font-semibold rounded-lg hover:bg-amber-50 disabled:opacity-50">
+              <FileText className="w-3.5 h-3.5" /> Solo subir
+            </button>
+          </div>
+        </>
       )}
 
       {qf.error && <p className="text-xs text-red-600 flex items-center gap-1"><AlertTriangle className="w-3 h-3" />{qf.error}</p>}
@@ -731,6 +763,20 @@ function NormalItem({ qf, expedienteId, onChange, onCustomName, onRemove, onUpda
         {qf.status === 'error' && <span title={qf.error} className="cursor-help"><AlertTriangle className="w-4 h-4 text-red-500" /></span>}
       </div>
       </div>
+
+      {/* Saltar IA (solo cuando es tipo IA-key y aún no se ha subido) */}
+      {isKey && qf.status === 'pending' && (
+        <div className="mt-2 flex items-center justify-end">
+          <button
+            type="button"
+            onClick={() => onUpdate({ specialType: 'none' })}
+            className="text-[11px] text-blue-700 hover:text-blue-900 font-medium underline underline-offset-2"
+            title="Subir sin que la IA analice este documento"
+          >
+            Saltar IA y solo subir
+          </button>
+        </div>
+      )}
 
       {/* Campo custom para "Otro" */}
       {requireCustomName && qf.status === 'pending' && (

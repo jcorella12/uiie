@@ -538,12 +538,18 @@ export default function InfoTecnicaForm({ expediente, cliente, inversores, readO
           {/* Subestación */}
           <FormGroup title="Subestación eléctrica">
             <Field label="Capacidad del transformador (kVA)">
-              <select
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min="0"
+                list="capacidad-subestacion-nom"
                 value={form.capacidad_subestacion_kva}
                 onChange={set('capacidad_subestacion_kva')}
+                placeholder="Selecciona o escribe — ej. 500"
                 className={inputCls}
-              >
-                <option value="">— Sin subestación —</option>
+              />
+              <datalist id="capacidad-subestacion-nom">
                 {[
                   // Tamaños estándar de transformadores en México (NOM/CFE)
                   5, 10, 15, 25, 30, 37.5, 45, 50, 75, 100, 112.5, 150,
@@ -552,9 +558,11 @@ export default function InfoTecnicaForm({ expediente, cliente, inversores, readO
                 ].map(kva => (
                   <option key={kva} value={kva}>{kva} kVA</option>
                 ))}
-              </select>
+              </datalist>
               <p className="text-[11px] text-gray-400 mt-1">
-                Tamaños estándar según NOM. No se aceptan valores fuera de catálogo.
+                Sugerencias NOM/CFE en el menú; también se admiten valores fuera de catálogo
+                (lo definitivo es la "Capacidad de la Subestación" del Dictamen de Verificación).
+                Deja vacío si no aplica subestación.
               </p>
             </Field>
           </FormGroup>
