@@ -80,7 +80,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // DELETE del expediente — los registros relacionados caen vía CASCADE
+    // Tablas dependientes SIN ON DELETE CASCADE — hay que limpiarlas a mano
+    // o el DELETE del expediente falla con foreign key violation.
+    // (las que sí tienen CASCADE: documentos_expediente, dictamenes,
+    //  expediente_testigos, expediente_hallazgos, expediente_checklist,
+    //  envios_revision, expediente_folio_audit — esas se borran solas.)
+    await db.from('inspecciones_agenda').delete().eq('expediente_id', expediente_id)
+
+    // solicitudes_folio.expediente_id no tiene CASCADE — desvincular para
+    // que la solicitud histórica sobreviva sin apuntar a un expediente borrado
+    await db
+      .from('solicitudes_folio')
+      .update({ expediente_id: null })
+      .eq('expediente_id', expediente_id)
+
+    // DELETE del expediente — los registros relacionados con CASCADE caen aquí
     const { error: delErr } = await db
       .from('expedientes')
       .delete()
