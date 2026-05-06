@@ -654,7 +654,7 @@ export async function generarContratoDocx(datos: ContratoData): Promise<Buffer> 
     rows: [
       new TableRow({
         children: [
-          sigBlock('"La Unidad de Inspección"', UIIE.representante, 'Firma del Representante Legal'),
+          sigBlock('"La Unidad de Inspección"', UIIE.razon_social, 'Firma del Representante Legal'),
           sigSpacerCell,
           sigBlock('"El Solicitante"', firmanteCliente, 'Firma del Representante'),
         ],

@@ -8,7 +8,7 @@ export default async function NuevaSolicitudPage() {
   if (!user) redirect('/login')
 
   const { data: usuario } = await supabase.from('usuarios').select('rol, nombre').eq('id', user.id).single()
-  if (!['inspector', 'inspector_responsable'].includes(usuario?.rol ?? '')) redirect('/dashboard')
+  if (!['inspector', 'inspector_responsable', 'admin', 'auxiliar'].includes(usuario?.rol ?? '')) redirect('/dashboard')
 
   // Load EPC/integrador clients for the dropdown
   // es_epc = true filtra solo los integradores (Greenlux, Dicoma, etc.)

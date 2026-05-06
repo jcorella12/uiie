@@ -7,7 +7,7 @@ import { formatDateShort } from '@/lib/utils'
 import Link from 'next/link'
 import {
   ClipboardList, AlertTriangle, ArrowRight, Eye, MoreHorizontal,
-  ChevronLeft, ChevronRight,
+  ChevronLeft, ChevronRight, Plus,
 } from 'lucide-react'
 
 const PAGE_SIZE = 20
@@ -154,6 +154,17 @@ export default async function GestionSolicitudesPage({ searchParams }: Props) {
 
   return (
     <div className="p-4 sm:p-7 space-y-5">
+
+      {/* ── Header con acción primaria ─────────────────────────────────── */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Solicitudes</h1>
+          <p className="text-gray-500 text-sm mt-0.5">Aprobar / rechazar solicitudes y asignar folios</p>
+        </div>
+        <Link href="/dashboard/inspector/solicitudes/nueva" className="btn-primary flex items-center gap-2">
+          <Plus className="w-4 h-4" /> Nueva Solicitud
+        </Link>
+      </div>
 
       {/* ── Tabs segmented ─────────────────────────────────────────────── */}
       <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">

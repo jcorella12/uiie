@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Zap, Plus, Upload } from 'lucide-react'
+import EliminarInversorButton from '@/components/inversores/EliminarInversorButton'
 
 type Filtro = 'todos' | 'con_cert' | 'sin_cert'
 
@@ -196,12 +197,15 @@ export default async function InversoresPage({ searchParams }: Props) {
                     {inv.total_usos ?? 0}
                   </td>
                   <td className="py-3 px-4 text-center">
-                    <Link
-                      href={`/dashboard/admin/inversores/${inv.id}`}
-                      className="text-xs text-brand-green hover:text-brand-green-dark font-semibold hover:underline"
-                    >
-                      Editar →
-                    </Link>
+                    <div className="inline-flex items-center gap-1">
+                      <Link
+                        href={`/dashboard/admin/inversores/${inv.id}`}
+                        className="text-xs text-brand-green hover:text-brand-green-dark font-semibold hover:underline"
+                      >
+                        Editar →
+                      </Link>
+                      <EliminarInversorButton id={inv.id} marca={inv.marca} modelo={inv.modelo} />
+                    </div>
                   </td>
                 </tr>
               ))}
