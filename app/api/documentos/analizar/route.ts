@@ -132,6 +132,16 @@ INSTRUCCIONES PARA LA DIRECCIÓN DEL PROYECTO:
 - Puede aparecer como "Domicilio:", "Dirección:", "Ubicación:", o en la sección de datos del propietario/instalación.
 - Extrae la dirección desglosada en sus partes: calle y número, colonia, municipio, ciudad, código postal y estado.
 
+INSTRUCCIONES PARA LA SECCIÓN "NOTAS" (datos técnicos del sistema, MUY IMPORTANTE):
+- Casi todos los dictámenes tienen un párrafo "NOTAS:" donde se describe explícitamente el sistema solar.
+- Ejemplo real: "NOTAS: El alcance de la inspección es correspondiente a la instalación del sistema solar fotovoltaico, con capacidad máxima en AC de 400kW y capacidad DC de 519.2kW con No de servicio suministrador 562190302308. Incluye 4 Inversores SOLAR EDGE SE100KUS y 880 módulos fotovoltaicos Marca Canadian Solar, modelo CS6W-590T 590W. La Subestación está fuera del alcance de la verificación."
+- De ese texto extrae: cantidad de inversores ("4"), marca y modelo del inversor ("SOLAR EDGE SE100KUS"), número de paneles ("880"), marca del panel ("Canadian Solar"), modelo del panel ("CS6W-590T"), potencia por panel en Wp ("590"), potencia AC y DC en kW.
+- También puedes encontrar "Capacidad de la Subestación" en kVA en otra sección — extráela también.
+
+INSTRUCCIONES PARA EL CAMPO "CAPACIDAD DE LA SUBESTACIÓN":
+- En la sección "DATOS DE ALMACENAMIENTO" o similar aparece "Capacidad de la Subestación: XXX (kVA)".
+- Este es el dato definitivo de la capacidad del transformador del sitio.
+
 Extrae la siguiente información en formato JSON:
 
 {
@@ -148,6 +158,15 @@ Extrae la siguiente información en formato JSON:
   "ciudad": "ciudad de la instalación o null",
   "codigo_postal": "código postal (5 dígitos) o null",
   "estado_mx": "nombre del estado (ej: Sonora, Sinaloa) o null",
+  "kwp": potencia DC del sistema en kWp leída de la sección NOTAS (ej. 519.2) o null,
+  "potencia_ac_kw": potencia AC máxima del sistema en kW (ej. 400) o null,
+  "num_inversores": cantidad de inversores como entero leída de NOTAS (ej. 4) o null,
+  "marca_inversor": "marca y modelo del inversor copiado de NOTAS (ej. 'SolarEdge SE100KUS') o null",
+  "num_paneles": número total de paneles fotovoltaicos como entero (ej. 880) o null,
+  "marca_panel": "marca del panel/módulo (ej. 'Canadian Solar') o null",
+  "modelo_panel": "modelo del panel/módulo (ej. 'CS6W-590T') o null",
+  "potencia_panel_wp": potencia por panel en Wp (ej. 590) o null,
+  "capacidad_subestacion_kva": capacidad del transformador del sitio en kVA o null,
   "resumen": "descripción breve del dictamen en 1-2 oraciones"
 }
 

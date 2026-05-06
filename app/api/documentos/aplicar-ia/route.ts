@@ -87,6 +87,40 @@ export async function POST(req: NextRequest) {
     if (ai.codigo_postal      != null) update.codigo_postal      = ai.codigo_postal
     if (ai.estado_mx          != null) update.estado_mx          = ai.estado_mx
 
+    // Datos técnicos extraídos de la sección NOTAS del Dictamen.
+    // El Dictamen es la fuente más confiable cuando el plano unifilar
+    // no está disponible o tiene varias subestaciones.
+    if (ai.kwp                != null) update.kwp                = ai.kwp
+    if (ai.num_paneles        != null) update.num_paneles        = ai.num_paneles
+    if (ai.potencia_panel_wp  != null) update.potencia_panel_wp  = ai.potencia_panel_wp
+    if (ai.num_inversores     != null) update.num_inversores     = ai.num_inversores
+
+    if (ai.capacidad_subestacion_kva != null) {
+      const valor = Number(ai.capacidad_subestacion_kva)
+      if (Number.isFinite(valor) && valor > 0) {
+        update.capacidad_subestacion_kva = valor
+      }
+    }
+
+    // Match inversor del catálogo si NOTAS describe marca + modelo
+    if (ai.marca_inversor) {
+      const marcaStr = String(ai.marca_inversor).toLowerCase().trim()
+      const { data: inversores } = await supabase
+        .from('inversores')
+        .select('id, marca, modelo')
+        .eq('activo', true)
+      if (inversores?.length) {
+        let match = inversores.find(inv =>
+          marcaStr.includes(inv.marca.toLowerCase()) &&
+          marcaStr.includes(inv.modelo.toLowerCase())
+        )
+        if (!match) {
+          match = inversores.find(inv => marcaStr.includes(inv.marca.toLowerCase()))
+        }
+        if (match) update.inversor_id = match.id
+      }
+    }
+
   } else if (tipoNorm === 'plano' || tipoNorm === 'memoria_tecnica') {
     if (ai.kwp              != null) update.kwp              = ai.kwp
     if (ai.num_paneles      != null) update.num_paneles      = ai.num_paneles

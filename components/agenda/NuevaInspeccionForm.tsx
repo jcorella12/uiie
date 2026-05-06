@@ -106,7 +106,7 @@ function Calendario({
   // Texto del tooltip
   function buildTooltip(insps: InspeccionExistente[]) {
     return insps.map(ins => {
-      const hora = new Date(ins.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+      const hora = new Date(ins.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' })
       const lugar = [ins.ciudad, ins.estado].filter(Boolean).join(', ')
       const folio = ins.numero_folio ?? ''
       const partes = [hora, folio, lugar].filter(Boolean)
@@ -200,7 +200,7 @@ function Calendario({
                       {count === 1 ? '1 inspección' : `${count} inspecciones`}
                     </p>
                     {insps.map((ins, idx) => {
-                      const hora  = new Date(ins.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+                      const hora  = new Date(ins.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' })
                       const lugar = [ins.ciudad, ins.estado].filter(Boolean).join(', ')
                       return (
                         <div key={idx} className={idx > 0 ? 'mt-1.5 pt-1.5 border-t border-gray-700' : ''}>
@@ -281,11 +281,17 @@ export default function NuevaInspeccionForm({
     setShowConfirmDialog(false)
   }
 
-  // Mapa de días YYYY-MM-DD → lista de inspecciones
+  // Mapa de días YYYY-MM-DD → lista de inspecciones.
+  // CRÍTICO: bucketear en TZ de México, no del navegador. Si el browser está
+  // en UTC (ej. Vercel preview en CI), una visita capturada como 9 AM CDMX
+  // queda como 15:00Z y se bucketea al día siguiente, generando alertas
+  // falsas (o el efecto inverso para visitas tempranas).
   const inspeccionesPorDia = useMemo<Map<string, InspeccionExistente[]>>(() => {
     const m = new Map<string, InspeccionExistente[]>()
     for (const ins of inspeccionesExistentes) {
-      const key = new Date(ins.fecha_hora).toLocaleDateString('en-CA')
+      const key = new Date(ins.fecha_hora).toLocaleDateString('en-CA', {
+        timeZone: 'America/Mexico_City',
+      })
       if (!m.has(key)) m.set(key, [])
       m.get(key)!.push(ins)
     }
@@ -430,7 +436,7 @@ export default function NuevaInspeccionForm({
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0 mt-1" />
                       <span>
                         <span className="font-mono font-medium">
-                          {new Date(ins.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                          {new Date(ins.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' })}
                         </span>
                         {ins.numero_folio && <span> — {ins.numero_folio}</span>}
                         {ins.cliente && <span className="text-amber-600"> · {ins.cliente}</span>}

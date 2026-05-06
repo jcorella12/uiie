@@ -23,9 +23,12 @@ async function loadHomologacionRedaccion(
   return data?.redaccion_lista ?? undefined
 }
 
+import { TZ_MX } from '@/lib/utils'
+
 function fmtFecha(iso: string): string {
   return new Date(iso).toLocaleDateString('es-MX', {
     year: 'numeric', month: 'long', day: 'numeric',
+    timeZone: TZ_MX,
   })
 }
 
@@ -75,7 +78,7 @@ export async function GET(req: NextRequest) {
   const folio: string = (exp.folio as any)?.numero_folio ?? exp.numero_folio ?? id
 
   const fechaBase = inspeccion?.fecha_hora ?? new Date().toISOString()
-  const horaStr = new Date(fechaBase).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false })
+  const horaStr = new Date(fechaBase).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ_MX })
   const fecha = `${fmtFecha(fechaBase)}, ${horaStr} hrs`
 
   const datos: ListaData = {

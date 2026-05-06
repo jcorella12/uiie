@@ -10,11 +10,14 @@ function getLogoPath(): string | undefined {
   return fs.existsSync(p) ? p : undefined
 }
 
+import { TZ_MX, isoMinusDays } from '@/lib/utils'
+
 function fmtFecha(iso: string): string {
   return new Date(iso).toLocaleDateString('es-MX', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+    timeZone: TZ_MX,
   })
 }
 
@@ -60,7 +63,13 @@ export async function GET(req: NextRequest) {
   const inv       = exp.inversor as any
   const folio: string = (exp.folio as any)?.numero_folio ?? exp.numero_folio ?? id
 
-  const fechaEmision = fmtFecha(new Date().toISOString())
+  // Fecha de emisión del plan: si hay visita agendada, dos días antes
+  // (el plan se entrega antes de la visita). Si no, hoy como fallback.
+  const fechaEmision = fmtFecha(
+    inspeccion?.fecha_hora
+      ? isoMinusDays(inspeccion.fecha_hora, 2)
+      : new Date().toISOString()
+  )
   const fechaVisita = inspeccion?.fecha_hora
     ? fmtFecha(inspeccion.fecha_hora)
     : 'Fecha por confirmar'

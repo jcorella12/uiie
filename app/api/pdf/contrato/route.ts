@@ -10,11 +10,14 @@ function getLogoPath(): string | undefined {
   return fs.existsSync(p) ? p : undefined
 }
 
+import { TZ_MX } from '@/lib/utils'
+
 function fmtFecha(iso: string): string {
   return new Date(iso).toLocaleDateString('es-MX', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
+    timeZone: TZ_MX,
   })
 }
 
@@ -92,7 +95,11 @@ export async function GET(req: NextRequest) {
   const datos: ContratoData = {
     logoSrc: getLogoPath(),
     folio,
-    fecha: fmtFecha(new Date().toISOString()),
+    // Fecha del contrato: si hay inspección agendada, usa esa fecha
+    // (el contrato se firma en/antes de la visita). Si aún no hay agenda,
+    // fallback a hoy. Antes mostraba new Date() siempre, lo que producía
+    // contratos fechados DESPUÉS de la visita ya realizada.
+    fecha: fmtFecha(inspeccion?.fecha_hora ?? new Date().toISOString()),
     fecha_visita: fechaVisita,
 
     // Solicitante / cliente final

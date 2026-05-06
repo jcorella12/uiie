@@ -10,9 +10,12 @@ function getLogoPath(): string | undefined {
   return fs.existsSync(p) ? p : undefined
 }
 
+import { TZ_MX } from '@/lib/utils'
+
 function fmtFecha(iso: string): string {
   return new Date(iso).toLocaleDateString('es-MX', {
     year: 'numeric', month: 'long', day: 'numeric',
+    timeZone: TZ_MX,
   })
 }
 
@@ -131,13 +134,13 @@ export async function GET(req: NextRequest) {
   const fechaInsp = inspeccion ? fmtFecha(inspeccion.fecha_hora) : fmtFecha(new Date().toISOString())
 
   const horaInicio = inspeccion
-    ? new Date(inspeccion.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+    ? new Date(inspeccion.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ_MX })
     : '10:00'
 
   const durMin = inspeccion?.duracion_min ?? 120
   const horaFin = inspeccion
     ? new Date(new Date(inspeccion.fecha_hora).getTime() + durMin * 60_000)
-        .toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
+        .toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ_MX })
     : '12:00'
 
   // Si la inspección tiene un inspector ejecutor diferente, usar ese nombre en el acta

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generarCotizacionDocx } from '@/lib/docx/CotizacionDocx'
+import { TZ_MX, isoMinusDays } from '@/lib/utils'
 import path from 'path'
 import fs from 'fs'
 
@@ -38,6 +39,20 @@ export async function GET(req: NextRequest) {
     .eq('folio_asignado_id', (exp as any).folio_id)
     .maybeSingle()
 
+  // Visita programada — la cotización se fecha 2 días antes de la visita.
+  const { data: inspeccion } = await supabase
+    .from('inspecciones_agenda')
+    .select('fecha_hora')
+    .eq('expediente_id', expedienteId)
+    .in('status', ['programada', 'en_curso', 'realizada'])
+    .order('fecha_hora', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  const fechaCotizacionISO = inspeccion?.fecha_hora
+    ? isoMinusDays(inspeccion.fecha_hora, 2)
+    : new Date().toISOString()
+
   const precio: number = (solicitud as any)?.precio_propuesto ?? 0
   const insp = (exp as any).inspector as { nombre: string; apellidos?: string } | null
   const cliente = (exp as any).cliente as {
@@ -50,10 +65,11 @@ export async function GET(req: NextRequest) {
 
   const datos = {
     folio,
-    fecha: new Date().toLocaleDateString('es-MX', {
+    fecha: new Date(fechaCotizacionISO).toLocaleDateString('es-MX', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
+      timeZone: TZ_MX,
     }),
     cliente_nombre: (exp as any).nombre_cliente_final ?? cliente?.nombre ?? 'Cliente',
     cliente_rfc: cliente?.rfc,
