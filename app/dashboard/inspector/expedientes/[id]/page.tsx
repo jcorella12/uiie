@@ -11,6 +11,7 @@ import CertificadoSection from '@/components/expedientes/CertificadoSection'
 import RevisionSection from '@/components/expedientes/RevisionSection'
 import EnviarRevisionCTA from '@/components/expedientes/EnviarRevisionCTA'
 import EditarFolioBtn from '@/components/expedientes/EditarFolioBtn'
+import EliminarExpedienteBtn from '@/components/expedientes/EliminarExpedienteBtn'
 import EliminarInspeccionBtn from '@/components/agenda/EliminarInspeccionBtn'
 import DescargarRespaldoZip from '@/components/expedientes/DescargarRespaldoZip'
 import CollapsibleCard from '@/components/ui/CollapsibleCard'
@@ -277,6 +278,18 @@ export default async function ExpedienteDetailPage({
         <div className="mt-5 pt-4 border-t border-gray-100">
           <ExpedienteProgressBar status={expediente.status} />
         </div>
+
+        {esAdmin && (
+          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-end">
+            <EliminarExpedienteBtn
+              expedienteId={expediente.id}
+              numeroFolio={folioNumero}
+              clienteNombre={cliente?.nombre ?? '—'}
+              status={expediente.status}
+              numDocumentos={(documentosConUrl ?? []).length}
+            />
+          </div>
+        )}
 
         {/* Anchor nav tabs — scroll horizontal en móvil con snap; flex-wrap en desktop */}
         <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-2">
