@@ -26,9 +26,18 @@ const FIGURA_INFO: Record<string, string> = {
 type TipoPersona = 'fisica' | 'moral'
 type FiguraJuridica = 'representante_legal' | 'gestor' | 'propietario' | ''
 
+interface InspectorOpcion {
+  id: string
+  nombre: string
+  apellidos: string | null
+}
+
 interface ClienteFormProps {
   modo: 'crear' | 'editar'
   cliente?: any
+  /** Lista de inspectores asignables. Pasa esto solo si el usuario actual
+   *  tiene permisos para reasignar (admin / inspector_responsable). */
+  inspectores?: InspectorOpcion[]
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -127,9 +136,10 @@ function PersonSubForm({
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function ClienteForm({ modo, cliente }: ClienteFormProps) {
+export default function ClienteForm({ modo, cliente, inspectores }: ClienteFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [inspectorId, setInspectorId] = useState<string>(cliente?.inspector_id ?? '')
 
   // ── Form state ──
   const [tipoPersona, setTipoPersona] = useState<TipoPersona>(
@@ -197,6 +207,9 @@ export default function ClienteForm({ modo, cliente }: ClienteFormProps) {
       figura_juridica: tipoPersona === 'moral' ? figuraJuridica : null,
       es_epc: esEpc,
       firmante_mismo: firmanteMismo,
+      // Solo enviamos inspector_id cuando el form fue renderizado con la
+      // lista (admin/responsable). Para otros roles el server lo descarta.
+      ...(inspectores ? { inspector_id: inspectorId || null } : {}),
       atiende_mismo: atiendeMismo,
     }
 
@@ -568,6 +581,29 @@ export default function ClienteForm({ modo, cliente }: ClienteFormProps) {
           <Field label="Notas internas" hint="Opcional — información adicional para el inspector">
             <textarea value={fields.notas} onChange={(e) => setField('notas', e.target.value)} className="input-field resize-none" rows={3} placeholder="Observaciones, aclaraciones o cualquier dato relevante..." />
           </Field>
+
+          {inspectores && (
+            <>
+              <SectionTitle>Inspector responsable</SectionTitle>
+              <Field
+                label="Inspector vinculado"
+                hint="Solo admin / inspector responsable puede reasignar. El inspector elegido verá este cliente en su catálogo. Deja en blanco para mantenerlo sin asignar."
+              >
+                <select
+                  value={inspectorId}
+                  onChange={(e) => setInspectorId(e.target.value)}
+                  className="input-field"
+                >
+                  <option value="">— Sin asignar —</option>
+                  {inspectores.map((insp) => (
+                    <option key={insp.id} value={insp.id}>
+                      {[insp.nombre, insp.apellidos].filter(Boolean).join(' ')}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            </>
+          )}
         </>
       )}
 

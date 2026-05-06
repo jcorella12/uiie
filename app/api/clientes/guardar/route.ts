@@ -67,6 +67,11 @@ export async function POST(req: NextRequest) {
         })()
       : cleanFields
 
+    // inspector_id: solo admin/responsable puede reasignar.
+    if ('inspector_id' in fieldsToUpdate && !isPrivileged) {
+      delete (fieldsToUpdate as any).inspector_id
+    }
+
     const { data, error } = await supabase
       .from('clientes')
       .update({ ...fieldsToUpdate, updated_at: new Date().toISOString() })

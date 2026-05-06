@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { formatDate, formatDateShort } from '@/lib/utils'
 import ClienteForm from '@/components/clientes/ClienteForm'
 import INECaptura from '@/components/ocr/INECaptura'
@@ -70,6 +70,28 @@ export default async function ClienteDetailPage({
     .single()
 
   if (!cliente) redirect('/dashboard/inspector/clientes')
+
+  // Rol del usuario actual — admin/responsable puede reasignar inspector del cliente
+  const { data: meRol } = await supabase
+    .from('usuarios')
+    .select('rol')
+    .eq('id', user.id)
+    .single()
+  const puedeReasignarInspector =
+    meRol?.rol === 'admin' || meRol?.rol === 'inspector_responsable'
+
+  // Lista de inspectores activos (solo si es relevante mostrarla — bypass RLS)
+  let inspectoresLista: { id: string; nombre: string; apellidos: string | null }[] = []
+  if (puedeReasignarInspector) {
+    const dbAdmin = await createServiceClient()
+    const { data } = await dbAdmin
+      .from('usuarios')
+      .select('id, nombre, apellidos')
+      .in('rol', ['inspector', 'inspector_responsable', 'auxiliar', 'admin'])
+      .eq('activo', true)
+      .order('nombre')
+    inspectoresLista = (data ?? []) as any
+  }
 
   const { data: expedientes } = await supabase
     .from('expedientes')
@@ -362,7 +384,11 @@ export default async function ClienteDetailPage({
           <ChevronRight className="w-4 h-4 text-gray-400 transition-transform group-open:rotate-90" />
         </summary>
         <div className="p-6 border-t border-gray-100">
-          <ClienteForm modo="editar" cliente={cliente} />
+          <ClienteForm
+            modo="editar"
+            cliente={cliente}
+            inspectores={puedeReasignarInspector ? inspectoresLista : undefined}
+          />
         </div>
       </details>
     </div>
