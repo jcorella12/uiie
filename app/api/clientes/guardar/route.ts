@@ -131,9 +131,21 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Default inspector_id al staff que está creando, para que vea el
+    // cliente desde su propio catálogo. Admin/responsable puede pasarlo
+    // explícito (lo que llegue en cleanFields tiene prioridad). Cliente
+    // self-service no se auto-asigna inspector.
+    const insertPayload: Record<string, any> = {
+      ...cleanFields,
+      created_by: user.id,
+    }
+    if (esStaff && !('inspector_id' in insertPayload)) {
+      insertPayload.inspector_id = user.id
+    }
+
     const { data, error } = await supabase
       .from('clientes')
-      .insert({ ...cleanFields, created_by: user.id })
+      .insert(insertPayload)
       .select('id, nombre')
       .single()
 
