@@ -7,7 +7,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, Save, Loader2, CheckCircle2, Link2,
   AlertTriangle, KeyRound, Eye, EyeOff, UserCog,
-  Mail, ShieldAlert,
+  Mail, ShieldAlert, UserCheck,
 } from 'lucide-react'
 import { ROLE_LABELS } from '@/lib/utils'
 import { UserRole } from '@/lib/types'
@@ -38,6 +38,14 @@ interface ClienteOption {
   ciudad: string | null
   rfc: string | null
   usuario_id: string | null
+  inspector_id: string | null
+}
+
+interface InspectorOption {
+  id: string
+  nombre: string
+  apellidos: string | null
+  rol: string
 }
 
 export default function EditarUsuarioPage() {
@@ -48,6 +56,8 @@ export default function EditarUsuarioPage() {
   const [usuario, setUsuario]               = useState<UsuarioData | null>(null)
   const [clientes, setClientes]             = useState<ClienteOption[]>([])
   const [clienteVinculado, setClienteVinculado] = useState<string>('')
+  const [inspectores, setInspectores]       = useState<InspectorOption[]>([])
+  const [inspectorAsignado, setInspectorAsignado] = useState<string>('')
   const [loading, setLoading]               = useState(true)
 
   // ── Datos personales ──
@@ -74,9 +84,13 @@ export default function EditarUsuarioPage() {
   useEffect(() => {
     async function cargar() {
       const id = params.id as string
-      const [{ data: u }, { data: cl }] = await Promise.all([
+      const [{ data: u }, { data: cl }, { data: insp }] = await Promise.all([
         supabase.from('usuarios').select('id, email, nombre, apellidos, telefono, rol, activo').eq('id', id).single(),
-        supabase.from('clientes').select('id, nombre, ciudad, rfc, usuario_id').order('nombre'),
+        supabase.from('clientes').select('id, nombre, ciudad, rfc, usuario_id, inspector_id').order('nombre'),
+        supabase.from('usuarios').select('id, nombre, apellidos, rol')
+          .in('rol', ['inspector', 'inspector_responsable', 'auxiliar', 'admin'])
+          .eq('activo', true)
+          .order('nombre'),
       ])
       if (u) {
         setUsuario(u as UsuarioData)
@@ -87,9 +101,13 @@ export default function EditarUsuarioPage() {
         setActivo(u.activo ?? true)
         setRol((u.rol as UserRole) ?? 'inspector')
         const vinculado = (cl ?? []).find((c: ClienteOption) => c.usuario_id === id)
-        if (vinculado) setClienteVinculado(vinculado.id)
+        if (vinculado) {
+          setClienteVinculado(vinculado.id)
+          setInspectorAsignado(vinculado.inspector_id ?? '')
+        }
       }
       setClientes(cl ?? [])
+      setInspectores((insp ?? []) as InspectorOption[])
       setLoading(false)
     }
     cargar()
@@ -124,7 +142,12 @@ export default function EditarUsuarioPage() {
       await supabase.from('clientes').update({ usuario_id: null }).eq('usuario_id', usuario.id)
         .neq('id', clienteVinculado || '00000000-0000-0000-0000-000000000000')
       if (clienteVinculado) {
-        await supabase.from('clientes').update({ usuario_id: usuario.id }).eq('id', clienteVinculado)
+        // Vincula el cliente al usuario y, en el mismo paso, al inspector
+        // que el admin haya elegido (puede ser null = sin asignar).
+        await supabase.from('clientes').update({
+          usuario_id: usuario.id,
+          inspector_id: inspectorAsignado || null,
+        }).eq('id', clienteVinculado)
       }
     }
 
@@ -350,6 +373,39 @@ export default function EditarUsuarioPage() {
                   <CheckCircle2 className="w-3 h-3" />
                   Cliente vinculado — verá sus proyectos en el portal
                 </p>
+              )}
+
+              {clienteVinculado && (
+                <div className="mt-4 pt-3 border-t border-gray-100">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
+                    <UserCheck className="w-3.5 h-3.5 text-brand-green" />
+                    Asignar inspector responsable
+                  </label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    El inspector elegido verá este cliente en su catálogo y podrá
+                    crearle expedientes. Deja en blanco para mantenerlo sin asignar.
+                  </p>
+                  <select
+                    value={inspectorAsignado}
+                    onChange={e => setInspectorAsignado(e.target.value)}
+                    className="input-field w-full"
+                  >
+                    <option value="">— Sin asignar —</option>
+                    {inspectores.map(i => (
+                      <option key={i.id} value={i.id}>
+                        {[i.nombre, i.apellidos].filter(Boolean).join(' ')}
+                        {' — '}
+                        {ROLE_LABELS[i.rol as UserRole] ?? i.rol}
+                      </option>
+                    ))}
+                  </select>
+                  {inspectorAsignado && (
+                    <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" />
+                      Inspector asignado — el cliente aparecerá en su lista
+                    </p>
+                  )}
+                </div>
               )}
             </div>
           )}
