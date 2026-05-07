@@ -103,6 +103,7 @@ export default async function ProyectoDetalleCliente({
     .from('expedientes')
     .select(`
       id, numero_folio, kwp, ciudad, estado_mx, status,
+      nombre_cliente_final, propietario_nombre,
       direccion_proyecto, colonia, municipio, codigo_postal,
       fecha_inicio, fecha_cierre, num_paneles, potencia_panel_wp,
       num_inversores, tipo_conexion, tipo_central, numero_medidor,
@@ -301,10 +302,15 @@ export default async function ProyectoDetalleCliente({
       {/* ── Header ── */}
       <div className="card">
         <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
+          <div className="min-w-0">
             <span className="font-mono font-bold text-brand-green text-2xl tracking-wide">
               {folioNum}
             </span>
+            {(expediente.nombre_cliente_final || expediente.propietario_nombre) && (
+              <p className="text-base font-semibold text-gray-800 mt-1 truncate">
+                {expediente.nombre_cliente_final || expediente.propietario_nombre}
+              </p>
+            )}
             <p className="text-gray-600 mt-1 text-sm flex items-center gap-1.5">
               {(expediente.ciudad || expediente.estado_mx) && (
                 <>

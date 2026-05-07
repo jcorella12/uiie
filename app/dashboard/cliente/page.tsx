@@ -83,6 +83,7 @@ export default async function ClientePortal({
 
   const EXP_SELECT = `
     id, numero_folio, kwp, ciudad, estado_mx, status, fecha_inicio,
+    nombre_cliente_final, propietario_nombre,
     cli_marca_paneles, cli_modelo_paneles, cli_num_paneles, cli_potencia_panel_wp,
     cli_marca_inversor, cli_modelo_inversor, cli_capacidad_kw, cli_num_inversores,
     cli_num_medidor, cli_direccion, cli_completado_at,
@@ -287,6 +288,13 @@ export default async function ClientePortal({
             const certs = (exp.certificados_cre as any[]) ?? []
 
             const folioNum: string = folio?.numero_folio ?? exp.numero_folio ?? '—'
+            // Nombre del proyecto: el cliente final del proyecto (si existe), o
+            // el propietario. Lo mostramos siempre para que el cliente sepa qué
+            // proyecto es ese folio (no todos memorizan números de folio).
+            const proyectoNombre: string | null =
+              (exp.nombre_cliente_final && String(exp.nombre_cliente_final).trim()) ||
+              (exp.propietario_nombre && String(exp.propietario_nombre).trim()) ||
+              null
             const tieneInspProgramada = inspecciones.some((i) =>
               ['programada', 'en_curso', 'realizada'].includes(i.status)
             )
@@ -321,6 +329,11 @@ export default async function ClientePortal({
                           Completado
                         </span>
                       </div>
+                      {proyectoNombre && (
+                        <p className="text-sm font-semibold text-gray-800 pl-6">
+                          {proyectoNombre}
+                        </p>
+                      )}
                       {primerCert.numero_certificado && (
                         <p className="text-xs text-gray-500 font-mono pl-6">
                           Certificado: <span className="font-semibold text-gray-700">{primerCert.numero_certificado}</span>
@@ -365,13 +378,18 @@ export default async function ClientePortal({
                 {/* Zona clickeable hacia el detalle */}
                 <Link href={detailHref} className="block group">
                   <div className="flex items-start justify-between gap-4 mb-4">
-                    <div>
+                    <div className="min-w-0">
                       <span className="font-mono font-bold text-brand-green text-lg">{folioNum}</span>
+                      {proyectoNombre && (
+                        <p className="text-sm font-semibold text-gray-800 mt-0.5 truncate">
+                          {proyectoNombre}
+                        </p>
+                      )}
                       <div className="flex items-center gap-2 mt-1 flex-wrap">
                         <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${st.color}`}>
                           {st.label}
                         </span>
-                        {exp.kwp && (
+                        {exp.kwp && exp.kwp > 0 && (
                           <span className="text-xs text-gray-500 flex items-center gap-1">
                             <Zap className="w-3 h-3" />
                             {exp.kwp} kWp
