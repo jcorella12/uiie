@@ -1049,7 +1049,21 @@ export default async function ExpedienteDetailPage({
           ultimoEnvio={ultimoEnvio ?? null}
           esAdmin={esAdmin}
           folio={folioNumero}
-          certificadoEmitido={(certificadosCNE ?? []).length > 0}
+          /*
+           * "Certificado emitido" = el admin ya llenó el número oficial CNE
+           * en la sección Certificado CNE del expediente. Esto es lo que
+           * realmente queremos validar para habilitar el cierre — la tabla
+           * central certificados_cre es opcional (registro global) y no
+           * todos los expedientes pasan por ahí.
+           *
+           * Antes el check era (certificadosCNE ?? []).length > 0 lo que
+           * dejaba expedientes sin poder cerrar aunque ya tuvieran número
+           * y archivos cargados.
+           */
+          certificadoEmitido={
+            !!(expediente as any).numero_certificado?.trim() ||
+            (certificadosCNE ?? []).length > 0
+          }
         />
       </Section>
     </div>
