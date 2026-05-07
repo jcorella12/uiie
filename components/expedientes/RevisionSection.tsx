@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react'
 import {
   Send, CheckCircle2, XCircle, Brain, Loader2, AlertTriangle,
   Info, ChevronDown, ChevronUp, Eye, FileCheck, FileX, RotateCcw,
-  ClipboardCheck, Award, Copy, Check, Paperclip, Sparkles,
+  ClipboardCheck, Award, Copy, Check, Paperclip, Sparkles, ArrowDown,
 } from 'lucide-react'
 import { useToast } from '@/components/ui/Toast'
 
@@ -756,51 +756,84 @@ export default function RevisionSection({
       )}
 
       {/* ── Bloque: Cerrar expediente (solo admin, solo cuando aprobado) ── */}
-      {esAdmin && status === 'aprobado' && !cerradoInfo && (
-        <div className={`rounded-xl border-2 ${
-          certificadoEmitido
-            ? 'border-emerald-300 bg-emerald-50'
-            : 'border-amber-300 bg-amber-50'
-        } p-5 space-y-3`}>
-          <div className="flex items-center gap-3">
-            <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-              certificadoEmitido ? 'bg-emerald-100' : 'bg-amber-100'
-            }`}>
-              <Award className={`w-5 h-5 ${certificadoEmitido ? 'text-emerald-600' : 'text-amber-600'}`} />
-            </div>
-            <div className="flex-1 min-w-0">
-              {certificadoEmitido ? (
-                <>
-                  <p className="font-semibold text-emerald-900 text-sm">Certificado registrado — listo para cerrar</p>
-                  <p className="text-xs text-emerald-700">
-                    El certificado ya está en la sección "Certificado CNE". Cierra el expediente para finalizar el proceso.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="font-semibold text-amber-900 text-sm">Falta registrar el certificado</p>
-                  <p className="text-xs text-amber-800">
-                    Antes de cerrar el expediente, sube el certificado en la sección{' '}
-                    <a href="#certificado" className="underline font-medium">Certificado CNE</a> de arriba.
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
+      {esAdmin && status === 'aprobado' && !cerradoInfo && (() => {
+        // Detecta si el admin ya subió el archivo del certificado/acuse en
+        // la sección "Documentos" (eso NO equivale a registrarlo — necesita
+        // pasar por la sección "Certificado CNE" con número oficial).
+        const docsCertSubidos = documentos.filter(d =>
+          d.tipo === 'certificado_cre' || d.tipo === 'acuse_cre',
+        )
+        const subidoComoDoc = !certificadoEmitido && docsCertSubidos.length > 0
 
-          {certificadoEmitido && (
-            <button
-              onClick={handleCerrar}
-              disabled={loadingCerrar}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
-            >
-              {loadingCerrar
-                ? <><Loader2 className="w-4 h-4 animate-spin" /> Cerrando…</>
-                : <><CheckCircle2 className="w-4 h-4" /> Cerrar expediente</>}
-            </button>
-          )}
-        </div>
-      )}
+        return (
+          <div className={`rounded-xl border-2 ${
+            certificadoEmitido
+              ? 'border-emerald-300 bg-emerald-50'
+              : 'border-amber-300 bg-amber-50'
+          } p-5 space-y-3`}>
+            <div className="flex items-center gap-3">
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                certificadoEmitido ? 'bg-emerald-100' : 'bg-amber-100'
+              }`}>
+                <Award className={`w-5 h-5 ${certificadoEmitido ? 'text-emerald-600' : 'text-amber-600'}`} />
+              </div>
+              <div className="flex-1 min-w-0">
+                {certificadoEmitido ? (
+                  <>
+                    <p className="font-semibold text-emerald-900 text-sm">Certificado registrado — listo para cerrar</p>
+                    <p className="text-xs text-emerald-700">
+                      El certificado ya está en la sección "Certificado CNE". Cierra el expediente para finalizar el proceso.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-semibold text-amber-900 text-sm">Falta registrar el certificado oficial</p>
+                    <p className="text-xs text-amber-800 mt-1">
+                      {subidoComoDoc ? (
+                        <>
+                          Detecté que ya subiste {docsCertSubidos.length === 1 ? 'un archivo' : `${docsCertSubidos.length} archivos`}{' '}
+                          de tipo <strong>{docsCertSubidos.map(d => TIPO_LABEL[d.tipo]).join(' / ')}</strong>{' '}
+                          en la sección Documentos. Eso es un respaldo, pero el sistema necesita el{' '}
+                          <strong>número oficial CNE</strong> registrado en la sección Certificado CNE para
+                          poder cerrar el expediente.
+                        </>
+                      ) : (
+                        <>
+                          Para cerrar el expediente hay que registrar el certificado con su <strong>número
+                          oficial CNE</strong> en la sección Certificado CNE (no basta con subirlo como
+                          documento de respaldo).
+                        </>
+                      )}
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {!certificadoEmitido && (
+              <a
+                href="#certificado"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-amber-600 text-white text-sm font-semibold hover:bg-amber-700 transition-colors shadow-sm"
+              >
+                <ArrowDown className="w-4 h-4" />
+                Ir a registrar certificado
+              </a>
+            )}
+
+            {certificadoEmitido && (
+              <button
+                onClick={handleCerrar}
+                disabled={loadingCerrar}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-sm disabled:opacity-50"
+              >
+                {loadingCerrar
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Cerrando…</>
+                  : <><CheckCircle2 className="w-4 h-4" /> Cerrar expediente</>}
+              </button>
+            )}
+          </div>
+        )
+      })()}
 
       {/* ── Estado: certificado ya emitido ── */}
       {(status === 'cerrado' || cerradoInfo) && esAdmin && (
