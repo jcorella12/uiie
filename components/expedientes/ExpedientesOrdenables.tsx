@@ -256,15 +256,20 @@ const STATUS_GROUP: Record<string, number> = {
 
 function sortedByOrden(rows: ExpedienteRow[]) {
   return [...rows].sort((a, b) => {
-    // 1° — grupo por estatus
+    // 1° — grupo por estatus (abiertos → revisión → finalizados)
     const ga = STATUS_GROUP[a.status] ?? 9
     const gb = STATUS_GROUP[b.status] ?? 9
     if (ga !== gb) return ga - gb
-    // 2° — orden manual del inspector (dentro del mismo grupo)
+    // Finalizados (grupo 3): SIEMPRE por número de folio descendente
+    // (los más nuevos arriba). Ignora el orden manual y created_at —
+    // el folio es el identificador estable que el usuario reconoce.
+    if (ga === 3) {
+      return (b.numero_folio ?? '').localeCompare(a.numero_folio ?? '')
+    }
+    // Activos (grupos 1 y 2): orden manual del inspector
     const ao = a.orden_inspector ?? 9999
     const bo = b.orden_inspector ?? 9999
     if (ao !== bo) return ao - bo
-    // 3° — más reciente primero
     return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   })
 }
@@ -533,13 +538,13 @@ function DraggableList({
                     )}
                     <tr
                       key={exp.id}
-                      draggable={!dragDisabled}
-                      onDragStart={() => !dragDisabled && onDragStart(i)}
-                      onDragEnter={() => !dragDisabled && onDragEnter(i)}
+                      draggable={!dragDisabled && grupo !== 3}
+                      onDragStart={() => !dragDisabled && grupo !== 3 && onDragStart(i)}
+                      onDragEnter={() => !dragDisabled && grupo !== 3 && onDragEnter(i)}
                       onDragOver={onDragOver}
-                      onDrop={() => !dragDisabled && onDrop()}
+                      onDrop={() => !dragDisabled && grupo !== 3 && onDrop()}
                       className={`border-b transition-colors group ${
-                        dragDisabled ? '' : 'cursor-grab active:cursor-grabbing'
+                        dragDisabled || grupo === 3 ? '' : 'cursor-grab active:cursor-grabbing'
                       } ${
                         exp.status === 'devuelto'
                           ? 'border-orange-200 bg-orange-50/60 hover:bg-orange-50 border-l-4 border-l-orange-400'
@@ -678,13 +683,13 @@ function DraggableList({
               )}
 
               <div
-                draggable={!dragDisabled}
-                onDragStart={() => !dragDisabled && onDragStart(i)}
-                onDragEnter={() => !dragDisabled && onDragEnter(i)}
+                draggable={!dragDisabled && grupo !== 3}
+                onDragStart={() => !dragDisabled && grupo !== 3 && onDragStart(i)}
+                onDragEnter={() => !dragDisabled && grupo !== 3 && onDragEnter(i)}
                 onDragOver={onDragOver}
-                onDrop={() => !dragDisabled && onDrop()}
+                onDrop={() => !dragDisabled && grupo !== 3 && onDrop()}
                 className={`group relative rounded-xl border bg-white transition-all hover:shadow-md ${
-                  dragDisabled ? '' : 'cursor-grab active:cursor-grabbing'
+                  dragDisabled || grupo === 3 ? '' : 'cursor-grab active:cursor-grabbing'
                 } ${
                   esDevuelto
                     ? 'border-orange-300 bg-orange-50/40 border-l-4 border-l-orange-500'
@@ -897,7 +902,11 @@ function AdminView({
   const baseActivos    = filtered.filter(e => ACTIVE_STATUSES.has(e.status))
   const baseFinal      = filtered.filter(e => !ACTIVE_STATUSES.has(e.status))
   const activos        = sort ? applySort(baseActivos, sort) : sortByUrgency(baseActivos)
-  const finalizadosAll = sort ? applySort(baseFinal,   sort) : sortByUrgency(baseFinal)
+  // Finalizados: por defecto SIEMPRE por folio descendente (los más nuevos
+  // arriba). Si el usuario elige un sort manual, ese gana.
+  const finalizadosAll = sort
+    ? applySort(baseFinal, sort)
+    : applySort(baseFinal, { key: 'folio', dir: 'desc' })
   const finalizados    = finalizadosAll.slice(
     pageFinal * FINALIZADOS_PER_PAGE,
     (pageFinal + 1) * FINALIZADOS_PER_PAGE,
