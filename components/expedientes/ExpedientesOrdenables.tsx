@@ -3,9 +3,9 @@
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import {
-  FolderOpen, ChevronUp, ChevronDown, GripVertical,
+  FolderOpen, ChevronUp, ChevronDown, ChevronsUpDown, GripVertical,
   CheckCircle2, Loader2, UserCog, Search, X, BellRing,
-  LayoutGrid, Rows3,
+  LayoutGrid, Rows3, ChevronLeft, ChevronRight,
 } from 'lucide-react'
 import { formatDateShort } from '@/lib/utils'
 import BotonZipCompacto from './BotonZipCompacto'
@@ -132,6 +132,117 @@ function SearchInput({ value, onChange }: { value: string; onChange: (v: string)
   )
 }
 
+// ─── Sortable column helpers (Windows-Explorer style) ────────────────────────
+type SortKey = 'folio' | 'cliente_final' | 'cliente' | 'inspector' | 'kwp' | 'ciudad' | 'fecha'
+type SortDir = 'asc' | 'desc'
+interface SortState { key: SortKey; dir: SortDir }
+
+function sortValue(row: ExpedienteRow, key: SortKey): string | number {
+  switch (key) {
+    case 'folio':         return row.numero_folio ?? ''
+    case 'cliente_final': return (row.nombre_cliente_final ?? '').toLowerCase()
+    case 'cliente':       return (row.cliente?.nombre ?? '').toLowerCase()
+    case 'inspector':     return (row.inspector?.nombre ?? '').toLowerCase()
+    case 'kwp':           return row.kwp ?? -1
+    case 'ciudad':        return (row.ciudad ?? '').toLowerCase()
+    case 'fecha':         return row.fecha_inicio ? new Date(row.fecha_inicio).getTime() : 0
+  }
+}
+
+function applySort<T extends ExpedienteRow>(rows: T[], sort: SortState | null): T[] {
+  if (!sort) return rows
+  const arr = [...rows]
+  arr.sort((a, b) => {
+    const va = sortValue(a, sort.key)
+    const vb = sortValue(b, sort.key)
+    if (va < vb) return sort.dir === 'asc' ? -1 : 1
+    if (va > vb) return sort.dir === 'asc' ?  1 : -1
+    return 0
+  })
+  return arr
+}
+
+/** Header clickeable. 1° clic asc, 2° desc, 3° quita el sort. */
+function SortableTh({
+  label, sortKey, current, onClick, className = 'text-left py-3 px-3 font-medium text-gray-500',
+}: {
+  label: string
+  sortKey: SortKey
+  current: SortState | null
+  onClick: (k: SortKey) => void
+  className?: string
+}) {
+  const active = current?.key === sortKey
+  return (
+    <th className={className}>
+      <button
+        type="button"
+        onClick={() => onClick(sortKey)}
+        className={`inline-flex items-center gap-1 hover:text-gray-700 ${active ? 'text-brand-green' : ''}`}
+        title={active ? `Ordenado ${current?.dir === 'asc' ? 'A→Z' : 'Z→A'} — clic para invertir` : `Ordenar por ${label}`}
+      >
+        {label}
+        {!active && <ChevronsUpDown className="w-3 h-3 opacity-40" />}
+        {active && current?.dir === 'asc'  && <ChevronUp   className="w-3 h-3" />}
+        {active && current?.dir === 'desc' && <ChevronDown className="w-3 h-3" />}
+      </button>
+    </th>
+  )
+}
+
+/** Hook: maneja el estado de sort con ciclo asc → desc → null. */
+function useSortable() {
+  const [sort, setSort] = useState<SortState | null>(null)
+  const handle = (key: SortKey) => {
+    setSort(prev => {
+      if (!prev || prev.key !== key) return { key, dir: 'asc' }
+      if (prev.dir === 'asc')        return { key, dir: 'desc' }
+      return null
+    })
+  }
+  return { sort, handle, setSort }
+}
+
+/** Paginador simple — solo "« 1 2 3 »". */
+function Paginator({ page, total, perPage, onPage }: {
+  page: number; total: number; perPage: number; onPage: (p: number) => void
+}) {
+  const pages = Math.ceil(total / perPage)
+  if (pages <= 1) return null
+  const start = page * perPage + 1
+  const end = Math.min((page + 1) * perPage, total)
+  return (
+    <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/40 text-xs">
+      <span className="text-gray-500">
+        Mostrando <span className="font-semibold text-gray-700">{start}–{end}</span> de {total}
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={() => onPage(Math.max(0, page - 1))}
+          disabled={page === 0}
+          className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <ChevronLeft className="w-3.5 h-3.5" />
+        </button>
+        <span className="px-2 text-gray-700 font-medium tabular-nums">
+          {page + 1} / {pages}
+        </span>
+        <button
+          type="button"
+          onClick={() => onPage(Math.min(pages - 1, page + 1))}
+          disabled={page === pages - 1}
+          className="p-1.5 rounded hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed"
+        >
+          <ChevronRight className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+const FINALIZADOS_PER_PAGE = 50
+
 // Grupo de estatus para el inspector: abiertos → en revisión → cerrados
 const STATUS_GROUP: Record<string, number> = {
   borrador:   1,
@@ -187,6 +298,13 @@ function DraggableList({
   const dragIdx = useRef<number | null>(null)
   const dragOverIdx = useRef<number | null>(null)
 
+  // Sort de columnas (estilo Windows). Cuando hay sort activo, el orden
+  // manual queda en pausa y se ordena por el criterio elegido.
+  const { sort, handle: handleSort, setSort } = useSortable()
+  // Paginación de finalizados (group=3) dentro de la lista
+  const [pageFinal, setPageFinal] = useState(0)
+  useEffect(() => { setPageFinal(0) }, [busqueda, sort])
+
   // ── Drag handlers ──
   function onDragStart(i: number) { dragIdx.current = i }
   function onDragEnter(i: number) { dragOverIdx.current = i }
@@ -236,15 +354,73 @@ function DraggableList({
     }
   }
 
-  const visibleItems = busqueda ? items.filter(r => matches(r, busqueda)) : items
+  // Items con búsqueda → con sort opcional → con paginación de finalizados
+  const baseItems = busqueda ? items.filter(r => matches(r, busqueda)) : items
+
+  let visibleItems: ExpedienteRow[]
+  let finalCount = 0
+  let finalPaginated = false
+  if (sort) {
+    // Con sort: separar grupos para mantener "finalizados al fondo",
+    // ordenar cada grupo por el criterio, paginar finalizados.
+    const noFin = baseItems.filter(r => (STATUS_GROUP[r.status] ?? 9) !== 3)
+    const fin   = baseItems.filter(r => (STATUS_GROUP[r.status] ?? 9) === 3)
+    const noFinSorted = applySort(noFin, sort)
+    const finSorted   = applySort(fin,   sort)
+    finalCount = finSorted.length
+    finalPaginated = finalCount > FINALIZADOS_PER_PAGE
+    const finPage = finSorted.slice(
+      pageFinal * FINALIZADOS_PER_PAGE,
+      (pageFinal + 1) * FINALIZADOS_PER_PAGE,
+    )
+    visibleItems = [...noFinSorted, ...finPage]
+  } else {
+    // Sin sort: orden manual (drag/drop). Solo paginar finalizados.
+    const fin = baseItems.filter(r => (STATUS_GROUP[r.status] ?? 9) === 3)
+    finalCount = fin.length
+    finalPaginated = finalCount > FINALIZADOS_PER_PAGE
+    if (finalPaginated) {
+      const noFin = baseItems.filter(r => (STATUS_GROUP[r.status] ?? 9) !== 3)
+      const finPage = fin.slice(
+        pageFinal * FINALIZADOS_PER_PAGE,
+        (pageFinal + 1) * FINALIZADOS_PER_PAGE,
+      )
+      visibleItems = [...noFin, ...finPage]
+    } else {
+      visibleItems = baseItems
+    }
+  }
+  const dragDisabled = !!sort
 
   return (
     <div className="space-y-3">
-      {/* Search + toggle de vista */}
-      <div className="flex items-center gap-2">
-        <div className="flex-1">
+      {/* Search + sort + toggle de vista */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex-1 min-w-[200px]">
           <SearchInput value={busqueda} onChange={setBusqueda} />
         </div>
+        <select
+          value={sort ? `${sort.key}:${sort.dir}` : ''}
+          onChange={e => {
+            const v = e.target.value
+            if (!v) { setSort(null); return }
+            const [k, d] = v.split(':') as [SortKey, SortDir]
+            setSort({ key: k, dir: d })
+          }}
+          className="text-sm border border-gray-200 rounded-lg px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-green/20 focus:border-brand-green"
+          aria-label="Ordenar por"
+        >
+          <option value="">Orden manual</option>
+          <option value="folio:asc">Folio (A→Z)</option>
+          <option value="folio:desc">Folio (Z→A)</option>
+          <option value="cliente_final:asc">Cliente final (A→Z)</option>
+          <option value="cliente_final:desc">Cliente final (Z→A)</option>
+          <option value="fecha:desc">Fecha (más reciente)</option>
+          <option value="fecha:asc">Fecha (más antiguo)</option>
+          <option value="kwp:desc">kWp (mayor)</option>
+          <option value="kwp:asc">kWp (menor)</option>
+          <option value="ciudad:asc">Ciudad (A→Z)</option>
+        </select>
         <div className="flex border border-gray-200 rounded-lg overflow-hidden flex-shrink-0" role="group" aria-label="Modo de vista">
           <button
             type="button"
@@ -309,15 +485,29 @@ function DraggableList({
       {/* ── Vista de tabla (compacta) ── */}
       {vista === 'table' && visibleItems.length > 0 && (
         <div className="border border-gray-200 rounded-xl overflow-hidden overflow-x-auto">
+          {sort && (
+            <div className="flex items-center justify-between px-4 py-2 bg-blue-50/60 border-b border-blue-100 text-xs">
+              <span className="text-blue-700">
+                Ordenado por <strong>{sort.key}</strong> ({sort.dir === 'asc' ? 'A→Z' : 'Z→A'}) — el orden manual está pausado
+              </span>
+              <button
+                type="button"
+                onClick={() => handleSort(sort.key)}
+                className="text-blue-700 font-semibold hover:underline"
+              >
+                Volver al orden manual
+              </button>
+            </div>
+          )}
           <table className="w-full text-sm min-w-[720px]">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/60">
                 <th className="w-8 py-3 px-2"></th>
                 <th className="w-14 py-3 px-2 text-center font-medium text-gray-400 text-xs">#</th>
-                <th className="text-left py-3 px-3 font-medium text-gray-500">Folio</th>
-                <th className="text-left py-3 px-3 font-medium text-gray-500">Cliente Final</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-500">kWp</th>
-                <th className="text-left py-3 px-3 font-medium text-gray-500 hidden lg:table-cell">Ciudad</th>
+                <SortableTh label="Folio"         sortKey="folio"         current={sort} onClick={handleSort} />
+                <SortableTh label="Cliente Final" sortKey="cliente_final" current={sort} onClick={handleSort} />
+                <SortableTh label="kWp"           sortKey="kwp"           current={sort} onClick={handleSort} className="text-right py-3 px-3 font-medium text-gray-500" />
+                <SortableTh label="Ciudad"        sortKey="ciudad"        current={sort} onClick={handleSort} className="text-left py-3 px-3 font-medium text-gray-500 hidden lg:table-cell" />
                 <th className="text-center py-3 px-3 font-medium text-gray-500">Estado</th>
                 <th className="text-center py-3 px-3 font-medium text-gray-500 hidden md:table-cell">Avance</th>
                 <th className="py-3 px-2 w-32"></th>
@@ -343,12 +533,14 @@ function DraggableList({
                     )}
                     <tr
                       key={exp.id}
-                      draggable
-                      onDragStart={() => onDragStart(i)}
-                      onDragEnter={() => onDragEnter(i)}
+                      draggable={!dragDisabled}
+                      onDragStart={() => !dragDisabled && onDragStart(i)}
+                      onDragEnter={() => !dragDisabled && onDragEnter(i)}
                       onDragOver={onDragOver}
-                      onDrop={onDrop}
-                      className={`border-b transition-colors cursor-grab active:cursor-grabbing group ${
+                      onDrop={() => !dragDisabled && onDrop()}
+                      className={`border-b transition-colors group ${
+                        dragDisabled ? '' : 'cursor-grab active:cursor-grabbing'
+                      } ${
                         exp.status === 'devuelto'
                           ? 'border-orange-200 bg-orange-50/60 hover:bg-orange-50 border-l-4 border-l-orange-400'
                           : 'border-gray-50 hover:bg-gray-50'
@@ -446,6 +638,9 @@ function DraggableList({
               })}
             </tbody>
           </table>
+          {finalPaginated && (
+            <Paginator page={pageFinal} total={finalCount} perPage={FINALIZADOS_PER_PAGE} onPage={setPageFinal} />
+          )}
         </div>
       )}
 
@@ -483,12 +678,14 @@ function DraggableList({
               )}
 
               <div
-                draggable
-                onDragStart={() => onDragStart(i)}
-                onDragEnter={() => onDragEnter(i)}
+                draggable={!dragDisabled}
+                onDragStart={() => !dragDisabled && onDragStart(i)}
+                onDragEnter={() => !dragDisabled && onDragEnter(i)}
                 onDragOver={onDragOver}
-                onDrop={onDrop}
-                className={`group relative rounded-xl border bg-white transition-all cursor-grab active:cursor-grabbing hover:shadow-md ${
+                onDrop={() => !dragDisabled && onDrop()}
+                className={`group relative rounded-xl border bg-white transition-all hover:shadow-md ${
+                  dragDisabled ? '' : 'cursor-grab active:cursor-grabbing'
+                } ${
                   esDevuelto
                     ? 'border-orange-300 bg-orange-50/40 border-l-4 border-l-orange-500'
                     : 'border-gray-200 hover:border-brand-green/40'
@@ -642,6 +839,11 @@ function DraggableList({
             </div>
           )
         })}
+        {finalPaginated && (
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <Paginator page={pageFinal} total={finalCount} perPage={FINALIZADOS_PER_PAGE} onPage={setPageFinal} />
+          </div>
+        )}
       </div>
       )}
     </div>
@@ -682,16 +884,26 @@ function AdminView({
   // "todos" = null; otherwise filter by inspector id
   const [filtroInsp, setFiltroInsp] = useState<string | null>(null)
   const [busqueda, setBusqueda] = useState('')
+  // Sort compartido entre activos y finalizados; al ser null, vuelve al
+  // orden por urgencia (default).
+  const { sort, handle: handleSort } = useSortable()
+  const [pageFinal, setPageFinal] = useState(0)
 
   const filtered = (filtroInsp
     ? expedientes.filter(e => e.inspector_id === filtroInsp)
     : expedientes
   ).filter(e => matches(e, busqueda))
 
-  const sorted = sortByUrgency(filtered)
-
-  const activos    = sorted.filter(e => ACTIVE_STATUSES.has(e.status))
-  const finalizados = sorted.filter(e => !ACTIVE_STATUSES.has(e.status))
+  const baseActivos    = filtered.filter(e => ACTIVE_STATUSES.has(e.status))
+  const baseFinal      = filtered.filter(e => !ACTIVE_STATUSES.has(e.status))
+  const activos        = sort ? applySort(baseActivos, sort) : sortByUrgency(baseActivos)
+  const finalizadosAll = sort ? applySort(baseFinal,   sort) : sortByUrgency(baseFinal)
+  const finalizados    = finalizadosAll.slice(
+    pageFinal * FINALIZADOS_PER_PAGE,
+    (pageFinal + 1) * FINALIZADOS_PER_PAGE,
+  )
+  // Reset paginación cuando cambia filtro/búsqueda/sort
+  useEffect(() => { setPageFinal(0) }, [filtroInsp, busqueda, sort])
 
   const totalActivos = (filtroInsp ? expedientes.filter(e => e.inspector_id === filtroInsp) : expedientes)
     .filter(e => ACTIVE_STATUSES.has(e.status)).length
@@ -758,7 +970,7 @@ function AdminView({
       )}
 
       {/* ── Unified table ── */}
-      {sorted.length === 0 ? (
+      {(activos.length === 0 && finalizadosAll.length === 0) ? (
         <div className="card text-center py-16 text-gray-400">
           <FolderOpen className="w-12 h-12 mx-auto mb-3 opacity-30" />
           <p className="font-medium text-gray-600">Sin expedientes</p>
@@ -768,22 +980,22 @@ function AdminView({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/60">
-                <th className="text-left py-3 px-3 font-medium text-gray-500">Folio</th>
-                <th className="text-left py-3 px-3 font-medium text-gray-500 hidden sm:table-cell">Cliente Final</th>
-                <th className="text-left py-3 px-3 font-medium text-gray-500 hidden sm:table-cell">Nombre</th>
-                <th className="text-left py-3 px-3 font-medium text-gray-500 hidden md:table-cell">Inspector</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-500 hidden md:table-cell">kWp</th>
-                <th className="text-left py-3 px-3 font-medium text-gray-500 hidden lg:table-cell">Ciudad</th>
+                <SortableTh label="Folio"         sortKey="folio"         current={sort} onClick={handleSort} />
+                <SortableTh label="Cliente Final" sortKey="cliente_final" current={sort} onClick={handleSort} className="text-left py-3 px-3 font-medium text-gray-500 hidden sm:table-cell" />
+                <SortableTh label="Nombre"        sortKey="cliente"       current={sort} onClick={handleSort} className="text-left py-3 px-3 font-medium text-gray-500 hidden sm:table-cell" />
+                <SortableTh label="Inspector"     sortKey="inspector"     current={sort} onClick={handleSort} className="text-left py-3 px-3 font-medium text-gray-500 hidden md:table-cell" />
+                <SortableTh label="kWp"           sortKey="kwp"           current={sort} onClick={handleSort} className="text-right py-3 px-3 font-medium text-gray-500 hidden md:table-cell" />
+                <SortableTh label="Ciudad"        sortKey="ciudad"        current={sort} onClick={handleSort} className="text-left py-3 px-3 font-medium text-gray-500 hidden lg:table-cell" />
                 <th className="text-center py-3 px-3 font-medium text-gray-500">Estado</th>
                 <th className="text-left py-3 px-3 font-medium text-gray-500 hidden xl:table-cell">Siguiente paso</th>
-                <th className="text-right py-3 px-3 font-medium text-gray-500 hidden md:table-cell">Inicio</th>
+                <SortableTh label="Inicio"        sortKey="fecha"         current={sort} onClick={handleSort} className="text-right py-3 px-3 font-medium text-gray-500 hidden md:table-cell" />
                 <th className="py-3 px-2"></th>
               </tr>
             </thead>
             <tbody>
-              {sorted.length === 0 && (
+              {activos.length === 0 && finalizadosAll.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="py-10 text-center text-sm text-gray-400">
+                  <td colSpan={10} className="py-10 text-center text-sm text-gray-400">
                     {busqueda ? `Sin resultados para "${busqueda}"` : 'Sin expedientes'}
                   </td>
                 </tr>
@@ -869,10 +1081,15 @@ function AdminView({
               })}
 
               {/* Divider between active and completed */}
-              {activos.length > 0 && finalizados.length > 0 && (
+              {activos.length > 0 && finalizadosAll.length > 0 && (
                 <tr className="bg-gray-50">
-                  <td colSpan={8} className="py-2 px-4 text-xs font-semibold text-gray-400 uppercase tracking-wide">
-                    Finalizados · {finalizados.length}
+                  <td colSpan={10} className="py-2 px-4 text-xs font-semibold text-gray-400 uppercase tracking-wide">
+                    Finalizados · {finalizadosAll.length}
+                    {finalizadosAll.length > FINALIZADOS_PER_PAGE && (
+                      <span className="ml-2 font-normal normal-case text-gray-400">
+                        (página {pageFinal + 1} de {Math.ceil(finalizadosAll.length / FINALIZADOS_PER_PAGE)})
+                      </span>
+                    )}
                   </td>
                 </tr>
               )}
@@ -937,6 +1154,12 @@ function AdminView({
               })}
             </tbody>
           </table>
+          <Paginator
+            page={pageFinal}
+            total={finalizadosAll.length}
+            perPage={FINALIZADOS_PER_PAGE}
+            onPage={setPageFinal}
+          />
         </div>
       )}
     </div>
