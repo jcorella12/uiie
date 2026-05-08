@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { syncCertificadoCre } from '@/lib/certificados/sync'
 
 // PATCH /api/expedientes/certificado
 // Body: { expediente_id, numero_certificado, fecha_emision_certificado }
@@ -49,7 +50,18 @@ export async function PATCH(req: NextRequest) {
 
     if (error) throw error
 
-    return NextResponse.json({ success: true })
+    // Sincroniza con la tabla central certificados_cre (Bóveda CNE / Mis
+    // Certificados). Solo crea/actualiza la fila si ya hay un PDF de
+    // certificado subido en documentos_expediente. Si solo se llenó el
+    // número, se materializará al subir el PDF.
+    const sync = await syncCertificadoCre(db, expediente_id, user.id)
+    if (!sync.ok && sync.reason !== 'sin_documento_certificado_cre') {
+      // Logueamos pero no rompemos la respuesta — guardar el número del
+      // expediente igual debe funcionar aunque la sincronización falle
+      console.warn('[expedientes/certificado] sync skipped:', sync.reason)
+    }
+
+    return NextResponse.json({ success: true, sincronizado: sync.ok })
   } catch (err: any) {
     console.error('[expedientes/certificado]', err)
     return NextResponse.json({ error: err.message ?? 'Error interno' }, { status: 500 })

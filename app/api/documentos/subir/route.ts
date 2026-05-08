@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
+import { syncCertificadoCre } from '@/lib/certificados/sync'
 
 // POST — upload a document for an expediente
 // Accepts multipart/form-data: file, tipo, nombre, expediente_id
@@ -71,6 +72,17 @@ export async function POST(req: NextRequest) {
     }).select('id').single()
 
     if (insertError) throw new Error(`Error al registrar documento: ${insertError.message}`)
+
+    // Si el documento es un certificado CNE o acuse, intentar sincronizar
+    // con la tabla central certificados_cre (Bóveda CNE / Mis Certificados).
+    // Solo se materializa la fila si el expediente ya tiene número de
+    // certificado registrado.
+    if (tipo === 'certificado_cre' || tipo === 'acuse_cre') {
+      const sync = await syncCertificadoCre(db, expedienteId, user.id)
+      if (!sync.ok && sync.reason !== 'sin_numero_certificado') {
+        console.warn('[documentos/subir] cert sync skipped:', sync.reason)
+      }
+    }
 
     return NextResponse.json({ success: true, documento_id: docData?.id, storage_path: storagePath })
   } catch (err: any) {
