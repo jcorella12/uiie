@@ -36,8 +36,9 @@ export default async function GestionSolicitudesPage({ searchParams }: Props) {
     .from('solicitudes_folio')
     .select(`
       id, cliente_nombre, propietario_nombre, kwp, precio_propuesto, precio_base, porcentaje_precio,
-      status, requiere_autorizacion, created_at, inspector_id,
-      inspector:usuarios!inspector_id(nombre, apellidos)
+      status, requiere_autorizacion, created_at, inspector_id, folio_asignado_id,
+      inspector:usuarios!inspector_id(nombre, apellidos),
+      folio:folios_lista_control!folio_asignado_id(numero_folio)
     `)
     .order('created_at', { ascending: false })
 
@@ -220,6 +221,7 @@ export default async function GestionSolicitudesPage({ searchParams }: Props) {
                   <th className="text-right py-3 px-3 font-medium text-muted text-[11.5px] uppercase tracking-wider">Precio</th>
                   <th className="text-left py-3 px-3 font-medium text-muted text-[11.5px] uppercase tracking-wider">% Tabulador</th>
                   <th className="text-center py-3 px-3 font-medium text-muted text-[11.5px] uppercase tracking-wider">Estado</th>
+                  <th className="text-left py-3 px-3 font-medium text-muted text-[11.5px] uppercase tracking-wider">Folio</th>
                   <th className="text-right py-3 px-3 font-medium text-muted text-[11.5px] uppercase tracking-wider">Fecha</th>
                   <th className="text-right py-3 px-5 font-medium text-muted text-[11.5px] uppercase tracking-wider">Acciones</th>
                 </tr>
@@ -264,6 +266,15 @@ export default async function GestionSolicitudesPage({ searchParams }: Props) {
 
                       <td className="py-3 px-3 text-center">
                         <StatusBadge status={s.status} dictionary={SOLICITUD_STATUS} size="sm" />
+                      </td>
+                      <td className="py-3 px-3 whitespace-nowrap">
+                        {(s as any).folio?.numero_folio ? (
+                          <span className="font-mono text-[12.5px] font-bold text-brand-green">
+                            {(s as any).folio.numero_folio}
+                          </span>
+                        ) : (
+                          <span className="text-muted/50 text-[11.5px]">—</span>
+                        )}
                       </td>
                       <td className="py-3 px-3 text-right text-muted text-[12px] whitespace-nowrap">
                         {formatDateShort(s.created_at)}
