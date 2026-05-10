@@ -10,7 +10,7 @@ import {
   Users, Settings, LogOut, ChevronDown,
   ClipboardList, BarChart3, UserCog, Building2, BookUser,
   Cpu, Globe, FileSpreadsheet, Receipt, UsersRound, Award, X, Brain,
-  HelpCircle, Search, Home, CheckSquare, MessageSquarePlus,
+  HelpCircle, Search, Home, CheckSquare, MessageSquarePlus, Inbox,
 } from 'lucide-react'
 import NotificationBell from './NotificationBell'
 
@@ -69,6 +69,7 @@ const NAV: Record<UserRole, NavGroup[]> = {
         { href: '/dashboard/admin/usuarios',     label: 'Usuarios',     icon: Users },
         { href: '/dashboard/inspectores',        label: 'Equipo',       icon: UserCog },
         { href: '/dashboard/admin/cne',          label: 'Bóveda CNE',   icon: Globe },
+        { href: '/dashboard/admin/cne/pendientes', label: 'CNE pendientes', icon: Inbox },
       ],
     },
     {
@@ -125,6 +126,7 @@ const NAV: Record<UserRole, NavGroup[]> = {
         { href: '/dashboard/admin/inversores',   label: 'Inversores',    icon: Cpu },
         { href: '/dashboard/admin/usuarios',     label: 'Usuarios',      icon: Users },
         { href: '/dashboard/admin/cne',          label: 'Bóveda CNE',    icon: Globe },
+        { href: '/dashboard/admin/cne/pendientes', label: 'CNE pendientes', icon: Inbox },
       ],
     },
     {
