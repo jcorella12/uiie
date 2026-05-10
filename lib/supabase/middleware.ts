@@ -24,6 +24,17 @@ export async function updateSession(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const pathname = request.nextUrl.pathname
+
+  // Webhooks públicos — autorizan vía secret en query/header, no via
+  // session. Saltarse el middleware aquí evita el redirect a /login que
+  // rompía a SendGrid Inbound Parse y a los cron jobs de Vercel.
+  const isWebhook =
+    pathname.startsWith('/api/cne/inbound') ||
+    pathname.startsWith('/api/cron/')
+  if (isWebhook) {
+    return supabaseResponse
+  }
+
   const publicRoutes = ['/login', '/forgot-password', '/reset-password']
   const isPublic = publicRoutes.some((r) => pathname.startsWith(r))
 
