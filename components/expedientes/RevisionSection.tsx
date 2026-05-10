@@ -83,7 +83,7 @@ interface HallazgosBlockProps {
   expedienteId: string
 }
 
-function HallazgosBlock({ titulo, color, hallazgos }: HallazgosBlockProps) {
+function HallazgosBlock({ titulo, color, hallazgos, expedienteId }: HallazgosBlockProps) {
   const colorMap = {
     red:    { box: 'bg-red-50 border-red-200',       text: 'text-red-900',    pill: 'bg-red-100 text-red-700' },
     orange: { box: 'bg-orange-50 border-orange-200', text: 'text-orange-900', pill: 'bg-orange-100 text-orange-700' },
@@ -117,17 +117,96 @@ function HallazgosBlock({ titulo, color, hallazgos }: HallazgosBlockProps) {
               <p className="text-xs text-gray-600 italic">→ {h.accion_requerida}</p>
             )}
             {h.notificar_inspector && (
-              <button
-                type="button"
-                onClick={() => alert('Notificación al inspector — disponible en la próxima fase')}
-                className="text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-full px-3 py-1 mt-1"
-              >
-                📨 Notificar al inspector
-              </button>
+              <NotificarInspectorBtn expedienteId={expedienteId} hallazgo={h} />
             )}
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+// ─── Botón funcional para notificar al inspector ──────────────────────────────
+// Manda la pregunta vía email con botones de respuesta. El inspector
+// responde sin necesidad de loguearse, y la respuesta queda registrada
+// en la tabla expediente_notificaciones_inspector.
+
+const TIPO_DEFAULT_PARA_CATEGORIA: Record<string, string> = {
+  direccion:           'direccion',
+  razon_social:        'razon_social',
+  capacidad:           'capacidad',
+  firmas:              'firmas',
+  ficha_pago:          'ficha_pago',
+  documentos_faltantes:'otro',
+  dacg:                'otro',
+  aguas:               'otro',
+}
+
+const PREGUNTA_DEFAULT: Record<string, string> = {
+  direccion:    '¿La dirección que está actualmente en el expediente es correcta?',
+  razon_social: '¿La razón social del expediente es la correcta?',
+  capacidad:    '¿La capacidad del sistema en el expediente es la correcta?',
+  firmas:       '¿Vas a obtener las firmas faltantes o procedemos sin ellas?',
+  ficha_pago:   '¿El monto de la ficha de pago es el correcto?',
+  otro:         '¿Cómo procedemos con este hallazgo?',
+}
+
+function NotificarInspectorBtn({ expedienteId, hallazgo }: { expedienteId: string; hallazgo: any }) {
+  const [busy, setBusy]   = useState(false)
+  const [done, setDone]   = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [destino, setDestino] = useState<string | null>(null)
+
+  async function notificar() {
+    setBusy(true); setError(null)
+    try {
+      const tipo = TIPO_DEFAULT_PARA_CATEGORIA[hallazgo.categoria] ?? 'otro'
+      const pregunta = PREGUNTA_DEFAULT[tipo] ?? 'Necesitamos tu confirmación.'
+      const res = await fetch('/api/expedientes/notificar-inspector', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expediente_id:         expedienteId,
+          tipo,
+          prioridad:             hallazgo.prioridad,
+          hallazgo_descripcion:  hallazgo.descripcion,
+          pregunta_al_inspector: pregunta,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error ?? 'Error')
+      setDone(true)
+      setDestino(data.destino?.nombre ?? null)
+    } catch (e: any) {
+      setError(e.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (done) {
+    return (
+      <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-3 py-1 mt-1 inline-flex items-center gap-1.5">
+        <CheckCircle2 className="w-3 h-3" />
+        Notificación enviada{destino ? ` a ${destino}` : ''}
+      </p>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-2 mt-1 flex-wrap">
+      <button
+        type="button"
+        onClick={notificar}
+        disabled={busy}
+        className="text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-full px-3 py-1 disabled:opacity-50 inline-flex items-center gap-1.5"
+      >
+        {busy ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+        📨 Notificar al inspector
+      </button>
+      {error && (
+        <span className="text-xs text-red-600">{error}</span>
+      )}
     </div>
   )
 }

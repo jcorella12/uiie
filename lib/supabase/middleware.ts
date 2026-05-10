@@ -28,9 +28,13 @@ export async function updateSession(request: NextRequest) {
   // Webhooks públicos — autorizan vía secret en query/header, no via
   // session. Saltarse el middleware aquí evita el redirect a /login que
   // rompía a SendGrid Inbound Parse y a los cron jobs de Vercel.
+  // /api/notificaciones es público para los links que reciben los
+  // inspectores por email (responden sin login con token único).
   const isWebhook =
     pathname.startsWith('/api/cne/inbound') ||
-    pathname.startsWith('/api/cron/')
+    pathname.startsWith('/api/cron/') ||
+    pathname.startsWith('/api/notificaciones/') ||
+    pathname.startsWith('/notificaciones/')
   if (isWebhook) {
     return supabaseResponse
   }
