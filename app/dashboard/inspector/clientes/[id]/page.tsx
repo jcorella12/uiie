@@ -6,6 +6,7 @@ import ClienteForm from '@/components/clientes/ClienteForm'
 import INECaptura from '@/components/ocr/INECaptura'
 import ClienteINEsAdicionales from '@/components/clientes/ClienteINEsAdicionales'
 import PortalAccesoButtons from '@/components/clientes/PortalAccesoButtons'
+import EliminarClienteBtn from '@/components/clientes/EliminarClienteBtn'
 import {
   ArrowLeft,
   User,
@@ -79,6 +80,13 @@ export default async function ClienteDetailPage({
     .single()
   const puedeReasignarInspector =
     meRol?.rol === 'admin' || meRol?.rol === 'inspector_responsable'
+
+  // Permiso para eliminar: admin/responsable cualquiera; inspector/auxiliar
+  // solo si lo creó o tiene asignado.
+  const puedeEliminar =
+    puedeReasignarInspector ||
+    (cliente as any).created_by === user.id ||
+    (cliente as any).inspector_id === user.id
 
   // Lista de inspectores activos (solo si es relevante mostrarla — bypass RLS)
   let inspectoresLista: { id: string; nombre: string; apellidos: string | null }[] = []
@@ -161,14 +169,19 @@ export default async function ClienteDetailPage({
             )}
           </div>
 
-          {/* Botón Ver Portal */}
-          <Link
-            href={`/dashboard/cliente?preview=${cliente.id}`}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-green-light text-brand-green text-sm font-semibold hover:bg-brand-green hover:text-white transition-all self-start"
-          >
-            <Eye className="w-4 h-4" />
-            Ver portal del cliente
-          </Link>
+          {/* Acciones del header */}
+          <div className="flex items-center gap-2 self-start flex-wrap">
+            <Link
+              href={`/dashboard/cliente?preview=${cliente.id}`}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-green-light text-brand-green text-sm font-semibold hover:bg-brand-green hover:text-white transition-all"
+            >
+              <Eye className="w-4 h-4" />
+              Ver portal del cliente
+            </Link>
+            {puedeEliminar && (
+              <EliminarClienteBtn clienteId={cliente.id} clienteNombre={cliente.nombre} />
+            )}
+          </div>
         </div>
       </div>
 

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { ROLE_LABELS } from '@/lib/utils'
 import { UserRole } from '@/lib/types'
+import DesactivarUsuarioBtn from '@/components/usuarios/DesactivarUsuarioBtn'
 
 const _supabase = createClient()
 
@@ -523,6 +524,25 @@ export default function EditarUsuarioPage() {
               : <><KeyRound className="w-4 h-4" /> Cambiar contraseña</>
             }
           </button>
+        </div>
+
+        {/* ── Zona peligrosa: desactivar usuario ── */}
+        <div className="card border-red-200 bg-red-50/30 space-y-3">
+          <h2 className="text-sm font-semibold text-red-900 pb-2 border-b border-red-100 flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-red-600" />
+            Zona peligrosa
+          </h2>
+          <p className="text-xs text-gray-600">
+            Desactivar al usuario impide que pueda iniciar sesión, pero su historial
+            (expedientes, documentos, registros) se mantiene intacto. Reversible:
+            puedes reactivarlo cuando quieras.
+          </p>
+          <DesactivarUsuarioBtn
+            usuarioId={usuario.id}
+            usuarioNombre={`${usuario.nombre} ${usuario.apellidos ?? ''}`.trim()}
+            usuarioRol={ROLE_LABELS[usuario.rol] ?? usuario.rol}
+            usuarioActivo={usuario.activo}
+          />
         </div>
 
       </div>
