@@ -58,6 +58,8 @@ export default function EditarUsuarioPage() {
   const [clienteVinculado, setClienteVinculado] = useState<string>('')
   const [inspectores, setInspectores]       = useState<InspectorOption[]>([])
   const [inspectorAsignado, setInspectorAsignado] = useState<string>('')
+  // Supervisor — para auxiliar / inspector, su jefe responsable
+  const [supervisorId, setSupervisorId] = useState<string>('')
   const [loading, setLoading]               = useState(true)
 
   // ── Datos personales ──
@@ -85,7 +87,7 @@ export default function EditarUsuarioPage() {
     async function cargar() {
       const id = params.id as string
       const [{ data: u }, { data: cl }, { data: insp }] = await Promise.all([
-        supabase.from('usuarios').select('id, email, nombre, apellidos, telefono, rol, activo').eq('id', id).single(),
+        supabase.from('usuarios').select('id, email, nombre, apellidos, telefono, rol, activo, supervisor_id').eq('id', id).single(),
         supabase.from('clientes').select('id, nombre, ciudad, rfc, usuario_id, inspector_id').order('nombre'),
         supabase.from('usuarios').select('id, nombre, apellidos, rol')
           .in('rol', ['inspector', 'inspector_responsable', 'auxiliar', 'admin'])
@@ -100,6 +102,7 @@ export default function EditarUsuarioPage() {
         setEmail(u.email ?? '')
         setActivo(u.activo ?? true)
         setRol((u.rol as UserRole) ?? 'inspector')
+        setSupervisorId((u as any).supervisor_id ?? '')
         const vinculado = (cl ?? []).find((c: ClienteOption) => c.usuario_id === id)
         if (vinculado) {
           setClienteVinculado(vinculado.id)
@@ -132,6 +135,11 @@ export default function EditarUsuarioPage() {
         ...(emailCambiado ? { email: email.trim().toLowerCase() } : {}),
         rol,
         activo,
+        // Supervisor solo aplica para auxiliar / inspector. Para otros roles
+        // mandamos null para limpiar cualquier valor previo.
+        supervisor_id: (rol === 'auxiliar' || rol === 'inspector')
+          ? (supervisorId || null)
+          : null,
       }),
     })
     const data = await res.json()
@@ -344,6 +352,44 @@ export default function EditarUsuarioPage() {
               <AlertTriangle className="w-3.5 h-3.5" />
               El rol cambiará al hacer clic en "Guardar cambios" arriba
             </p>
+          )}
+
+          {/* Supervisor — solo para auxiliar / inspector */}
+          {(rol === 'auxiliar' || rol === 'inspector') && (
+            <div className="pt-3 border-t border-gray-100">
+              <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1.5">
+                <UserCheck className="w-3.5 h-3.5 text-brand-green" />
+                Inspector responsable / supervisor
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                {rol === 'auxiliar'
+                  ? 'Inspector al que reporta este auxiliar (ej. Alejandra → Luis Felipe).'
+                  : 'Inspector responsable que supervisa a este inspector.'}
+              </p>
+              <select
+                value={supervisorId}
+                onChange={e => setSupervisorId(e.target.value)}
+                className="input-field w-full"
+              >
+                <option value="">— Sin supervisor asignado —</option>
+                {inspectores
+                  .filter(i => i.id !== usuario.id) // un usuario no puede ser su propio supervisor
+                  .filter(i => ['inspector', 'inspector_responsable', 'admin'].includes(i.rol))
+                  .map(i => (
+                    <option key={i.id} value={i.id}>
+                      {[i.nombre, i.apellidos].filter(Boolean).join(' ')}
+                      {' — '}
+                      {ROLE_LABELS[i.rol as UserRole] ?? i.rol}
+                    </option>
+                  ))}
+              </select>
+              {supervisorId && (
+                <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Aparecerá en el catálogo de usuarios como reporte de este inspector
+                </p>
+              )}
+            </div>
           )}
 
           {/* Vínculo cliente */}

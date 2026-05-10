@@ -30,10 +30,26 @@ export default async function GestionUsuariosPage() {
 
   const { data: usuarios } = await supabase
     .from('usuarios')
-    .select('id, email, nombre, apellidos, rol, activo, created_at')
+    .select('id, email, nombre, apellidos, rol, activo, created_at, supervisor_id, supervisor:usuarios!supervisor_id(nombre, apellidos)')
     .order('created_at', { ascending: false })
 
   const lista = usuarios ?? []
+
+  // Para los usuarios con rol 'cliente', traemos el cliente vinculado y su
+  // inspector (clientes.usuario_id → clientes.inspector_id → usuarios).
+  // Así se ve qué inspector "atiende" a cada cuenta cliente. Los demás
+  // roles (auxiliar / inspector) usan usuarios.supervisor_id directo.
+  const clienteUserIds = lista.filter(u => u.rol === 'cliente').map(u => u.id)
+  const inspectorPorUsuario: Record<string, { nombre: string; apellidos: string | null }> = {}
+  if (clienteUserIds.length > 0) {
+    const { data: vinculos } = await supabase
+      .from('clientes')
+      .select('usuario_id, inspector:usuarios!inspector_id(nombre, apellidos)')
+      .in('usuario_id', clienteUserIds)
+    for (const v of (vinculos ?? []) as any[]) {
+      if (v.usuario_id && v.inspector) inspectorPorUsuario[v.usuario_id] = v.inspector
+    }
+  }
 
   return (
     <div className="p-4 sm:p-8">
@@ -63,6 +79,7 @@ export default async function GestionUsuariosPage() {
                 <th className="text-left py-3 px-4 font-medium text-gray-500">Nombre</th>
                 <th className="text-left py-3 px-4 font-medium text-gray-500">Email</th>
                 <th className="text-center py-3 px-4 font-medium text-gray-500">Rol</th>
+                <th className="text-left py-3 px-4 font-medium text-gray-500">Inspector</th>
                 <th className="text-center py-3 px-4 font-medium text-gray-500">Activo</th>
                 <th className="text-right py-3 px-4 font-medium text-gray-500">Registro</th>
                 <th className="text-center py-3 px-4 font-medium text-gray-500">Acciones</th>
@@ -83,6 +100,32 @@ export default async function GestionUsuariosPage() {
                       <span className={ROL_BADGE[rolKey] ?? 'badge-pendiente'}>
                         {ROLE_LABELS[rolKey] ?? u.rol}
                       </span>
+                    </td>
+                    {/* Inspector que atiende:
+                        · cliente   → el inspector del registro clientes vinculado
+                        · auxiliar  → su supervisor_id directo
+                        · inspector → su supervisor (jefe responsable)
+                        · admin/responsable → N/A */}
+                    <td className="py-3 px-4 text-sm text-gray-600">
+                      {u.rol === 'cliente' ? (
+                        inspectorPorUsuario[u.id] ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-brand-green-light text-brand-green font-medium">
+                            {[inspectorPorUsuario[u.id].nombre, inspectorPorUsuario[u.id].apellidos].filter(Boolean).join(' ')}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-xs">— sin asignar —</span>
+                        )
+                      ) : (u.rol === 'auxiliar' || u.rol === 'inspector') ? (
+                        (u as any).supervisor ? (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-brand-green-light text-brand-green font-medium">
+                            {[(u as any).supervisor.nombre, (u as any).supervisor.apellidos].filter(Boolean).join(' ')}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-xs">— sin asignar —</span>
+                        )
+                      ) : (
+                        <span className="text-gray-300 text-xs">N/A</span>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-center">
                       {u.activo ? (

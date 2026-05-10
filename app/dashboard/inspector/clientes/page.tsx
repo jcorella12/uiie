@@ -29,7 +29,7 @@ export default async function CatalogoClientesPage({
 
   let query = supabase
     .from('clientes')
-    .select('id, tipo_persona, nombre, nombre_comercial, rfc, ciudad, estado, email, es_epc, created_at')
+    .select('id, tipo_persona, nombre, nombre_comercial, rfc, ciudad, estado, email, es_epc, created_at, inspector:usuarios!inspector_id(id, nombre, apellidos)')
 
   if (soloEpc) {
     query = query.eq('es_epc', true)
@@ -150,6 +150,7 @@ export default async function CatalogoClientesPage({
                   <th className="text-center py-3 px-3 font-medium text-gray-500">Tipo</th>
                   <th className="text-left py-3 px-3 font-medium text-gray-500">RFC</th>
                   <th className="text-left py-3 px-3 font-medium text-gray-500">Ciudad / Estado</th>
+                  <th className="text-left py-3 px-3 font-medium text-gray-500">Inspector</th>
                   <th className="text-center py-3 px-3 font-medium text-gray-500">EPC</th>
                   <th className="text-right py-3 px-4 font-medium text-gray-500">Acciones</th>
                 </tr>
@@ -194,6 +195,17 @@ export default async function CatalogoClientesPage({
                       {cliente.ciudad || cliente.estado
                         ? [cliente.ciudad, cliente.estado].filter(Boolean).join(', ')
                         : <span className="text-gray-400">—</span>}
+                    </td>
+
+                    {/* Inspector asignado */}
+                    <td className="py-3 px-3 text-gray-600 text-sm">
+                      {(cliente as any).inspector ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-brand-green-light text-brand-green font-medium">
+                          {[(cliente as any).inspector.nombre, (cliente as any).inspector.apellidos].filter(Boolean).join(' ')}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">— sin asignar —</span>
+                      )}
                     </td>
 
                     {/* EPC */}

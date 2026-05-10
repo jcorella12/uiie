@@ -23,13 +23,14 @@ export async function PATCH(req: NextRequest) {
 
   const body = await req.json()
   const {
-    id,           // UUID del usuario a actualizar
+    id,            // UUID del usuario a actualizar
     nombre,
     apellidos,
     telefono,
     rol,
     activo,
-    password,     // opcional — si viene, se cambia la contraseña
+    supervisor_id, // opcional — UUID del supervisor (auxiliar/inspector)
+    password,      // opcional — si viene, se cambia la contraseña
   } = body
 
   if (!id) return NextResponse.json({ error: 'Falta id del usuario' }, { status: 400 })
@@ -51,11 +52,19 @@ export async function PATCH(req: NextRequest) {
 
   // ── 1. Actualizar tabla pública usuarios ─────────────────────────────────
   const updatePub: Record<string, unknown> = {}
-  if (nombre    !== undefined) updatePub.nombre    = nombre
-  if (apellidos !== undefined) updatePub.apellidos = apellidos || null
-  if (telefono  !== undefined) updatePub.telefono  = telefono || null
-  if (rol       !== undefined) updatePub.rol       = rol
-  if (activo    !== undefined) updatePub.activo    = activo
+  if (nombre        !== undefined) updatePub.nombre        = nombre
+  if (apellidos     !== undefined) updatePub.apellidos     = apellidos || null
+  if (telefono      !== undefined) updatePub.telefono      = telefono || null
+  if (rol           !== undefined) updatePub.rol           = rol
+  if (activo        !== undefined) updatePub.activo        = activo
+  // supervisor_id: null limpia el vínculo, UUID lo asigna. Validamos que
+  // no sea el mismo usuario (no puede ser su propio supervisor).
+  if (supervisor_id !== undefined) {
+    if (supervisor_id && supervisor_id === id) {
+      return NextResponse.json({ error: 'Un usuario no puede ser su propio supervisor' }, { status: 400 })
+    }
+    updatePub.supervisor_id = supervisor_id || null
+  }
 
   if (Object.keys(updatePub).length > 0) {
     const { error: errPub } = await admin
