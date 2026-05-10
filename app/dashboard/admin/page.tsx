@@ -1,7 +1,8 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceClient } from '@/lib/supabase/server'
 import KPICard from '@/components/dashboard/KPICard'
 import FinancieroKPIs from '@/components/dashboard/FinancieroKPIs'
+import MarketShareCNE from '@/components/dashboard/MarketShareCNE'
 import { StatusBadge, SOLICITUD_STATUS } from '@/components/ui/StatusBadge'
 import { formatCurrency } from '@/lib/pricing'
 import { formatDateShort } from '@/lib/utils'
@@ -23,6 +24,14 @@ export default async function AdminDashboard({ searchParams }: Props) {
   const { data: usuario } = await supabase.from('usuarios').select('rol').eq('id', user.id).single()
   if (!['admin', 'inspector_responsable'].includes(usuario?.rol ?? '')) redirect('/dashboard')
 
+  // Service client para market share — admin/responsable, ya pasó el guard
+  const dbAdmin = await createServiceClient()
+  const certsAdminPromise = dbAdmin
+    .from('expedientes')
+    .select('numero_certificado, fecha_emision_certificado')
+    .not('numero_certificado', 'is', null)
+    .not('fecha_emision_certificado', 'is', null)
+
   const [
     { count: pendientes },
     { count: enRevision },
@@ -30,6 +39,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
     { count: foliosLibres },
     { data: cola },
     { count: requierenAuth },
+    { data: certsAdmin },
   ] = await Promise.all([
     supabase.from('solicitudes_folio').select('*', { count: 'exact', head: true }).eq('status', 'pendiente'),
     supabase.from('solicitudes_folio').select('*', { count: 'exact', head: true }).eq('status', 'en_revision'),
@@ -41,6 +51,7 @@ export default async function AdminDashboard({ searchParams }: Props) {
       .order('created_at', { ascending: true })
       .limit(20),
     supabase.from('solicitudes_folio').select('*', { count: 'exact', head: true }).eq('requiere_autorizacion', true).in('status', ['pendiente', 'en_revision']),
+    certsAdminPromise,
   ])
 
   // ── Filtro vía tab ────────────────────────────────────────────────────────
@@ -133,6 +144,9 @@ export default async function AdminDashboard({ searchParams }: Props) {
 
       {/* ── 3. Finanzas (legacy component, mantiene su look) ────────────── */}
       <FinancieroKPIs />
+
+      {/* ── 3.5. Market Share CNE (mes / semana / trimestre) ───────────── */}
+      <MarketShareCNE certs={(certsAdmin ?? []) as any} />
 
       {/* ── 4. Cola de revisión con tabs segmented ─────────────────────── */}
       <section className="rounded-[14px] bg-white border border-border overflow-hidden">
