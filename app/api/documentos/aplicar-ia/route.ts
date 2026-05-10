@@ -18,16 +18,40 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 })
   }
 
-  // Verify the user has access to this expediente via RLS before using service client to write
-  const { data: expAccess } = await supabase
+  // Para validar permisos de manera explícita y confiable, ya no dependemos
+  // del SELECT con RLS (que históricamente daba falsos negativos cuando el
+  // usuario era inspector_ejecutor delegado, o cuando current_user_rol()
+  // no resolvía bien el JWT). Mejor: rol del usuario + match contra
+  // inspector_id / inspector_ejecutor_id del expediente, leídos con
+  // service client.
+  const svc = await createServiceClient()
+
+  const { data: u } = await svc.from('usuarios').select('rol').eq('id', user.id).single()
+  const rol = u?.rol ?? ''
+  const esStaffEditor = ['admin', 'inspector_responsable', 'inspector', 'auxiliar'].includes(rol)
+  if (!esStaffEditor) {
+    return NextResponse.json({ error: 'Sin permisos para aplicar datos al expediente' }, { status: 403 })
+  }
+
+  const { data: expAccess } = await svc
     .from('expedientes')
-    .select('id, nombre_cliente_final')
+    .select('id, nombre_cliente_final, inspector_id, inspector_ejecutor_id')
     .eq('id', expediente_id)
     .maybeSingle()
-  if (!expAccess) return NextResponse.json({ error: 'No autorizado' }, { status: 403 })
 
-  // Use service client for writes to bypass any column-level RLS restrictions
-  const svc = await createServiceClient()
+  if (!expAccess) {
+    return NextResponse.json({ error: 'Expediente no encontrado' }, { status: 404 })
+  }
+
+  const esAdminORespResp = ['admin', 'inspector_responsable'].includes(rol)
+  const esInspectorAsignado =
+    expAccess.inspector_id === user.id || expAccess.inspector_ejecutor_id === user.id
+  if (!esAdminORespResp && !esInspectorAsignado) {
+    return NextResponse.json(
+      { error: 'No tienes permisos sobre este expediente. Pide al inspector responsable que aplique los datos.' },
+      { status: 403 },
+    )
+  }
 
   // Obtener el análisis guardado en el documento
   const { data: doc } = await svc
@@ -105,7 +129,7 @@ export async function POST(req: NextRequest) {
     // Match inversor del catálogo si NOTAS describe marca + modelo
     if (ai.marca_inversor) {
       const marcaStr = String(ai.marca_inversor).toLowerCase().trim()
-      const { data: inversores } = await supabase
+      const { data: inversores } = await svc
         .from('inversores')
         .select('id, marca, modelo')
         .eq('activo', true)
@@ -148,7 +172,7 @@ export async function POST(req: NextRequest) {
     // Try to match inversor from catalog using the extracted marca_inversor text
     if (ai.marca_inversor) {
       const marcaStr = String(ai.marca_inversor).toLowerCase().trim()
-      const { data: inversores } = await supabase
+      const { data: inversores } = await svc
         .from('inversores')
         .select('id, marca, modelo')
         .eq('activo', true)
@@ -177,7 +201,17 @@ export async function POST(req: NextRequest) {
     .update(update)
     .eq('id', expediente_id)
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (error) {
+    console.error('[documentos/aplicar-ia] UPDATE expedientes failed:', {
+      expediente_id, tipo, tipoNorm,
+      message: error.message, code: (error as any).code, details: (error as any).details,
+      campos: Object.keys(update),
+    })
+    return NextResponse.json(
+      { error: `No se pudo guardar: ${error.message}` },
+      { status: 500 },
+    )
+  }
 
   return NextResponse.json({
     ok: true,
