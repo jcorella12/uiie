@@ -6,7 +6,7 @@
 //
 // Configurar en .env.local:
 //   RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxx
-//   RESEND_FROM=folios@iisac.mx           (opcional, default usa el de abajo)
+//   RESEND_FROM=folios@uiie.com.mx        (opcional, default usa el de abajo)
 //
 // Importante: el dominio del remitente debe estar verificado en Resend.
 // Mientras no se verifica, usar `onboarding@resend.dev` (el de prueba de Resend).

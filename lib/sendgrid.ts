@@ -4,8 +4,11 @@ if (process.env.SENDGRID_API_KEY) {
   sgMail.setApiKey(process.env.SENDGRID_API_KEY)
 }
 
-const FROM_EMAIL = 'folios@iisac.mx'
-const FROM_NAME = 'CIAE — UIIE-CRE-021'
+// El dominio remitente debe estar verificado en SendGrid (DKIM + SPF).
+// Configurable vía env var en caso de cambiar el dominio sin re-deploy:
+//   SENDGRID_FROM_EMAIL=folios@uiie.com.mx
+const FROM_EMAIL = process.env.SENDGRID_FROM_EMAIL ?? 'folios@uiie.com.mx'
+const FROM_NAME  = process.env.SENDGRID_FROM_NAME  ?? 'CIAE — UIIE-CRE-021'
 
 export interface FolioAsignadoEmailData {
   toEmail: string

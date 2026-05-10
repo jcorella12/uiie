@@ -83,7 +83,7 @@ export default function LoginPage() {
                 id="email"
                 type="email"
                 className="input-field"
-                placeholder="usuario@iisac.mx"
+                placeholder="usuario@uiie.com.mx"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
