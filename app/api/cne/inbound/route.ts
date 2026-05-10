@@ -28,8 +28,17 @@ import { syncCertificadoCre } from '@/lib/certificados/sync'
  */
 
 const CERT_REGEX = /UIIE-CC-\d{4,6}-\d{4}/i
-// "instalación de XXX" o "instalación de XXX ubicada"
-const CLIENTE_REGEX = /instalaci[oó]n\s+de\s+(.+?)(?:\s+ubicad|\s+resultado|\.\s|\n)/i
+// "instalación de XXX ubicada en…" — el nombre puede traer asteriscos
+// (Gmail bold) y line breaks. Limpiamos antes de matchear.
+// [\s\S] sustituye al flag /s/ que requiere ES2018+ (no lo soporta el target actual)
+const CLIENTE_REGEX = /instalaci[oó]n\s+de\s+([\s\S]+?)\s+ubicad/i
+
+function limpiarCliente(raw: string): string {
+  return raw
+    .replace(/[*_]/g, '')           // markdown bold/italic de Gmail
+    .replace(/\s+/g, ' ')           // colapsar saltos de línea internos
+    .trim()
+}
 
 const STATUSES_CANDIDATOS = ['en_proceso', 'revision', 'aprobado', 'cerrado']
 
@@ -68,11 +77,19 @@ export async function POST(req: NextRequest) {
     )
 
     // Extracción
-    const certMatch = text.match(CERT_REGEX) ?? subject.match(CERT_REGEX)
+    // 1. Normalizar Unicode: Gmail manda "ó" en forma descompuesta NFD
+    //    (o + combining acute), lo cual rompe los regex con [oó].
+    //    .normalize('NFC') compone los caracteres a su forma canónica.
+    // 2. Limpiar asteriscos/guiones bajos de Gmail bold/italic.
+    const textLimpio = text
+      .normalize('NFC')
+      .replace(/[*_]/g, '')
+
+    const certMatch = textLimpio.match(CERT_REGEX) ?? subject.match(CERT_REGEX)
     const numero_certificado = certMatch ? certMatch[0].toUpperCase() : null
 
-    const cliMatch = text.match(CLIENTE_REGEX)
-    const cliente_extraido = cliMatch ? cliMatch[1].trim().replace(/\s+/g, ' ') : null
+    const cliMatch = textLimpio.match(CLIENTE_REGEX)
+    const cliente_extraido = cliMatch ? limpiarCliente(cliMatch[1]) : null
 
     const db = await createServiceClient()
 
