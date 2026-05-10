@@ -125,7 +125,27 @@ export async function GET(req: NextRequest) {
       .eq('activo', true)
       .not('email', 'is', null)
 
-    const emails = (destinatarios ?? []).map(d => d.email).filter((e): e is string => !!e)
+    let emails = (destinatarios ?? []).map(d => d.email).filter((e): e is string => !!e)
+
+    // ── SANDBOX RESEND ────────────────────────────────────────────────────
+    // Mientras no esté verificado el dominio en Resend, este servicio
+    // está en modo sandbox y solo permite mandar emails al owner de la
+    // cuenta. Si la env var RESEND_OWNER_EMAIL está seteada, filtramos
+    // los destinatarios a ese email para evitar que el cron falle.
+    // Cuando el dominio esté verificado, simplemente borra esa env var
+    // de Vercel y este filtro se desactiva.
+    const ownerOnly = process.env.RESEND_OWNER_EMAIL?.trim().toLowerCase()
+    let filtradoSandbox = false
+    if (ownerOnly) {
+      const allowed = emails.filter(e => e.toLowerCase() === ownerOnly)
+      if (allowed.length > 0) {
+        emails = allowed
+      } else {
+        emails = [ownerOnly]  // forzar al owner aunque no esté en la lista
+      }
+      filtradoSandbox = true
+    }
+
     if (emails.length === 0) {
       return NextResponse.json({ ok: true, sent: 0, reason: 'no_recipients' })
     }
@@ -166,6 +186,7 @@ export async function GET(req: NextRequest) {
       sent: emails.length,
       summary,
       ventana: { desde: desdeISO, hasta: ahora.toISOString() },
+      ...(filtradoSandbox ? { sandbox_filtered_to: emails } : {}),
     })
   } catch (err: any) {
     console.error('[cron/reporte-diario]', err)
