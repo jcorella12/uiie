@@ -3,7 +3,14 @@ export type TipoPersona = 'fisica' | 'moral'
 export type SolicitudStatus = 'pendiente' | 'en_revision' | 'aprobada' | 'rechazada' | 'folio_asignado'
 export type ExpedienteStatus = 'borrador' | 'en_proceso' | 'revision' | 'aprobado' | 'rechazado' | 'devuelto' | 'cerrado'
 export type InspeccionStatus = 'programada' | 'en_curso' | 'realizada' | 'cancelada'
-export type DocumentoTipo = 'contrato' | 'plano' | 'memoria_tecnica' | 'dictamen' | 'acta' | 'lista_verificacion' | 'paquete_actas_listas' | 'resolutivo' | 'ficha_pago' | 'fotografia' | 'certificado_cre' | 'acuse_cre' | 'evidencia_visita' | 'otro'
+export type DocumentoTipo =
+  | 'contrato' | 'plano' | 'memoria_tecnica' | 'dictamen'
+  | 'acta' | 'lista_verificacion' | 'paquete_actas_listas'
+  | 'resolutivo' | 'ficha_pago' | 'comprobante_pago'
+  | 'fotografia' | 'evidencia_visita' | 'foto_medidor'
+  | 'certificado_cre' | 'acuse_cre'
+  | 'cotizacion' | 'plan_inspeccion' | 'recibo_cfe'
+  | 'otro'
 export type InversorFase = 'monofasico' | 'bifasico' | 'trifasico'
 
 export interface Usuario {

@@ -15,15 +15,20 @@ const TIPO_LABELS: Record<DocumentoTipo, string> = {
   plano:                'Diagrama Unifilar',
   memoria_tecnica:      'Memoria de Cálculo',
   dictamen:             'Dictamen UVIE',
-  acta:                 'Acta de Inspección',
-  lista_verificacion:   'Lista de Verificación',
+  acta:                 'Acta de Inspección FO-12',
+  lista_verificacion:   'Lista DACG',
   paquete_actas_listas: 'Paquete Actas y Listas (Acta + Lista + Cotización + Plan)',
-  resolutivo:           'Resolutivo CFE',
+  cotizacion:           'Cotización',
+  plan_inspeccion:      'Plan de Inspección',
+  resolutivo:           'Oficio Resolutivo CFE',
   ficha_pago:           'Ficha de Pago (Resolutivo)',
+  comprobante_pago:     'Comprobante de Pago',
+  recibo_cfe:           'Recibo CFE',
   fotografia:           'Fotografía',
+  evidencia_visita:     'Foto Evidencia de Visita',
+  foto_medidor:         'Foto del Medidor',
   certificado_cre:      'Certificado CNE',
   acuse_cre:            'Acuse CNE',
-  evidencia_visita:     'Evidencia de Visita',
   otro:                 'Otro',
 }
 
@@ -31,8 +36,10 @@ const IA_KEY_TIPOS: DocumentoTipo[] = ['resolutivo', 'dictamen', 'plano', 'memor
 
 const TIPOS_LISTA: DocumentoTipo[] = [
   'paquete_actas_listas',
-  'acta', 'lista_verificacion', 'resolutivo', 'ficha_pago', 'dictamen',
-  'plano', 'memoria_tecnica', 'contrato', 'fotografia',
+  'acta', 'lista_verificacion', 'cotizacion', 'plan_inspeccion',
+  'resolutivo', 'ficha_pago', 'comprobante_pago', 'recibo_cfe',
+  'dictamen', 'plano', 'memoria_tecnica', 'contrato',
+  'evidencia_visita', 'foto_medidor', 'fotografia',
   'certificado_cre', 'acuse_cre', 'otro',
 ]
 
@@ -80,9 +87,16 @@ interface Props {
 
 function smartTipo(file: File): DocumentoTipo {
   const name = file.name.toLowerCase()
-  if (file.type.startsWith('image/')) return 'fotografia'
   if (/paquete|actas.*listas|listas.*actas|acta.*lista.*cotiz|escaneo.*completo/.test(name)) return 'paquete_actas_listas'
-  if (name.includes('acta'))                                  return 'acta'
+  // Fotos específicas (van antes del fallback de fotografía genérica)
+  if (file.type.startsWith('image/') && /selfie|evidencia|inspector|fachada/.test(name)) return 'evidencia_visita'
+  if (file.type.startsWith('image/') && /medidor|kwh|cfe.*medidor/.test(name))           return 'foto_medidor'
+  if (file.type.startsWith('image/')) return 'fotografia'
+  if (name.includes('acta') || /fo.?12/.test(name))                  return 'acta'
+  if (name.includes('cotiza'))                                       return 'cotizacion'
+  if (/plan.*inspec|plan.*visita/.test(name))                        return 'plan_inspeccion'
+  if (/recibo.*cfe|recibo.*luz|cfe.*recibo/.test(name))              return 'recibo_cfe'
+  if (/comprob.*pago|deposito|pago.*cfe/.test(name))                 return 'comprobante_pago'
   if (name.includes('unifilar') || name.includes('diagrama')) return 'plano'
   if (name.includes('memoria') || name.includes('calculo') || name.includes('cálculo')) return 'memoria_tecnica'
   if (name.includes('plano'))                                 return 'plano'

@@ -7,25 +7,32 @@ import { Loader2, CheckCircle, AlertTriangle, UploadCloud } from 'lucide-react'
 
 const TIPO_LABELS: Record<DocumentoTipo, string> = {
   contrato:             'Contrato',
-  plano:                'Plano',
-  memoria_tecnica:      'Memoria Técnica',
+  plano:                'Plano / Diagrama Unifilar',
+  memoria_tecnica:      'Memoria Técnica / de Cálculo',
   dictamen:             'Dictamen UVIE',
-  acta:                 'Acta de Inspección (firmada)',
-  lista_verificacion:   'Lista de Verificación (firmada)',
+  acta:                 'Acta de Inspección FO-12 (firmada)',
+  lista_verificacion:   'Lista DACG (firmada)',
   paquete_actas_listas: 'Paquete Actas y Listas (Acta + Lista + Cotización + Plan)',
-  resolutivo:           'Resolutivo CFE',
-  ficha_pago:           'Ficha de Pago (Resolutivo)',
+  cotizacion:           'Cotización',
+  plan_inspeccion:      'Plan de Inspección',
+  resolutivo:           'Oficio Resolutivo CFE',
+  ficha_pago:           'Ficha de Pago (del Resolutivo)',
+  comprobante_pago:     'Comprobante de Pago (del cliente)',
+  recibo_cfe:           'Recibo CFE',
   fotografia:           'Fotografía',
+  evidencia_visita:     'Foto Evidencia de Visita (selfie)',
+  foto_medidor:         'Foto del Medidor',
   certificado_cre:      'Certificado CNE',
   acuse_cre:            'Acuse CNE',
-  evidencia_visita:     'Evidencia de Visita',
   otro:                 'Otro',
 }
 
 const TODOS_TIPOS: DocumentoTipo[] = [
   'paquete_actas_listas',
-  'acta', 'lista_verificacion', 'resolutivo', 'ficha_pago', 'dictamen',
-  'contrato', 'plano', 'memoria_tecnica', 'fotografia',
+  'acta', 'lista_verificacion', 'cotizacion', 'plan_inspeccion',
+  'resolutivo', 'ficha_pago', 'comprobante_pago', 'recibo_cfe',
+  'dictamen', 'contrato', 'plano', 'memoria_tecnica',
+  'evidencia_visita', 'foto_medidor', 'fotografia',
   'certificado_cre', 'acuse_cre', 'otro',
 ]
 

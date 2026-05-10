@@ -2,37 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import { CLAUDE_MODELS, getAnthropicClient } from '@/lib/ai'
 import { registrarCostoIA } from '@/lib/ai/cost'
-
-const PROMPT_REVISION = `Eres un revisor experto de expedientes de inspección de sistemas fotovoltaicos para la CRE (Comisión Reguladora de Energía) en México.
-
-Analiza los documentos de este expediente y genera un reporte de revisión estructurado.
-
-Verifica los siguientes puntos:
-1. COMPLETITUD: ¿Están presentes los documentos requeridos (contrato, plano, memoria técnica, acta de inspección, fotografías)?
-2. CONSISTENCIA DE FECHAS: ¿Las fechas en los diferentes documentos son coherentes entre sí?
-3. FIRMAS: ¿Los documentos clave (contrato, acta) tienen las firmas requeridas?
-4. TESTIGOS E IDENTIFICACIONES: ¿Aparecen testigos en el acta? ¿Tienen identificaciones adjuntas?
-5. DATOS TÉCNICOS: ¿Los valores de kWp, número de paneles, modelo de inversor son consistentes en todos los documentos?
-6. NOMBRE DEL PROPIETARIO: ¿El nombre del cliente/propietario es consistente en todos los documentos?
-7. DIRECCIÓN: ¿La dirección del proyecto es consistente?
-
-Responde ÚNICAMENTE con este JSON válido:
-{
-  "resultado": "aprobado" | "con_observaciones" | "rechazado",
-  "resumen": "párrafo breve explicando el resultado general",
-  "documentos_encontrados": ["lista de tipos de documentos detectados"],
-  "documentos_faltantes": ["lista de documentos que no se encontraron o no están completos"],
-  "alertas": [
-    {
-      "nivel": "error" | "advertencia" | "info",
-      "categoria": "fecha" | "firma" | "identificacion" | "dato_tecnico" | "completitud" | "coherencia",
-      "descripcion": "descripción clara del problema o punto a verificar",
-      "accion_requerida": "qué debe hacer el inspector para resolverlo"
-    }
-  ],
-  "puntos_ok": ["lista de puntos que SÍ cumplen correctamente"],
-  "recomendacion_final": "texto breve con instrucción directa para el equipo revisor"
-}`
+import { SKILL_UIIE_PROMPT } from '@/lib/ai/skill-uiie'
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
@@ -53,10 +23,16 @@ export async function POST(req: NextRequest) {
 
   const db = await createServiceClient()
 
-  // Cargar expediente con datos del cliente
+  // Cargar expediente con datos del cliente + inspector
   const { data: exp } = await db
     .from('expedientes')
-    .select('*, cliente:clientes(nombre), inversor:inversores!expedientes_inversor_id_fkey(marca, modelo, potencia_kw)')
+    .select(`
+      *,
+      cliente:clientes(nombre, rfc, ciudad, estado),
+      inversor:inversores!expedientes_inversor_id_fkey(marca, modelo, potencia_kw),
+      inspector:usuarios!inspector_id(nombre, apellidos),
+      inspector_ejecutor:usuarios!inspector_ejecutor_id(nombre, apellidos)
+    `)
     .eq('id', expediente_id)
     .single()
 
@@ -74,21 +50,48 @@ export async function POST(req: NextRequest) {
   }
 
   // Contexto del expediente (sin documentos)
+  const inspectorPrincipal = (exp.inspector as any)
+  const inspectorEjecutor  = (exp.inspector_ejecutor as any)
+  const inspectorNombre    = inspectorPrincipal
+    ? `${inspectorPrincipal.nombre} ${inspectorPrincipal.apellidos ?? ''}`.trim()
+    : 'No especificado'
+  const ejecutorNombre     = inspectorEjecutor
+    ? `${inspectorEjecutor.nombre} ${inspectorEjecutor.apellidos ?? ''}`.trim()
+    : null
+
   const contexto = `
 EXPEDIENTE: ${exp.numero_folio ?? exp.id}
-Cliente/Propietario: ${(exp.cliente as any)?.nombre ?? exp.propietario_nombre ?? 'No especificado'}
+Cliente / Razón social: ${(exp.cliente as any)?.nombre ?? exp.propietario_nombre ?? exp.nombre_cliente_final ?? 'No especificado'}
+RFC: ${(exp.cliente as any)?.rfc ?? '—'}
 Sistema: ${exp.kwp ?? '?'} kWp, ${exp.num_paneles ?? '?'} paneles
 Inversor: ${(exp.inversor as any) ? `${(exp.inversor as any).marca} ${(exp.inversor as any).modelo}` : 'No especificado'}
-Dirección: ${exp.direccion_proyecto ?? ''}, ${exp.ciudad ?? ''}, ${exp.estado_mx ?? ''}
+Dirección del proyecto: ${exp.direccion_proyecto ?? ''}, ${exp.colonia ?? ''}, CP ${exp.codigo_postal ?? ''}, ${exp.municipio ?? exp.ciudad ?? ''}, ${exp.estado_mx ?? ''}
 Número de medidor: ${exp.numero_medidor ?? 'No capturado'}
-Documentos en el expediente (${docs.length} total):
+Inspector responsable del expediente: ${inspectorNombre}
+${ejecutorNombre ? `Inspector que ejecutó la visita (delegado): ${ejecutorNombre}` : ''}
+Fecha programada de inspección: ${exp.fecha_inicio ?? 'No especificada'}
+Status actual: ${exp.status}
+
+NOTA — el Inspector Responsable de la UVIE es Joaquín Corella Puente. Si el inspector ejecutor NO es Joaquín, debe firmar con "p.a." (por ausencia) en la cotización y en el campo del Inspector Responsable del Acta página 2.
+
+Documentos subidos al expediente (${docs.length} total):
 ${docs.map((d: any, i: number) => `  ${i + 1}. [${d.tipo}] "${d.nombre}" — subido: ${new Date(d.created_at).toLocaleDateString('es-MX')}`).join('\n')}
 `
 
-  // Tomar los primeros 6 documentos que sean PDF o imagen para análisis profundo
+  // Tomar hasta 12 documentos PDF/imagen para análisis profundo (antes 6).
+  // Priorizamos los tipos clave del SKILL: OR, Dictamen, Acta, DACG,
+  // Cotización, Plan, Recibo CFE, Comprobante, Foto medidor, Evidencia.
+  const PRIORIDAD_DOCS: Record<string, number> = {
+    resolutivo: 1, dictamen: 2, acta: 3, lista_verificacion: 4,
+    paquete_actas_listas: 4,
+    cotizacion: 5, plan_inspeccion: 6, recibo_cfe: 7,
+    comprobante_pago: 8, ficha_pago: 8, foto_medidor: 9,
+    evidencia_visita: 10, contrato: 11, plano: 12, memoria_tecnica: 13,
+  }
   const docsAnalizables = docs
     .filter((d: any) => d.storage_path && (d.mime_type === 'application/pdf' || d.mime_type?.startsWith('image/')))
-    .slice(0, 6)
+    .sort((a: any, b: any) => (PRIORIDAD_DOCS[a.tipo] ?? 99) - (PRIORIDAD_DOCS[b.tipo] ?? 99))
+    .slice(0, 12)
 
   // Construir contenido para Claude
   const contentParts: any[] = []
@@ -151,16 +154,22 @@ ${docs.map((d: any, i: number) => `  ${i + 1}. [${d.tipo}] "${d.nombre}" — sub
     })
   }
 
-  contentParts.push({ type: 'text', text: `\n\n${PROMPT_REVISION}` })
+  // Instrucción final + reminder del SKILL
+  contentParts.push({
+    type: 'text',
+    text: '\n\nAhora aplica el SKILL definido al inicio del system prompt y responde solo con el JSON especificado.',
+  })
 
-  // Llamar a Claude
+  // Llamar a Claude — el SKILL completo va en system prompt para
+  // que el modelo lo tenga como rol fijo durante todo el análisis.
   let resultado: any = null
   let costoUSD = 0
   const MODELO = CLAUDE_MODELS.ANALISIS_DOC
   try {
     const msg = await anthropic.messages.create({
       model: MODELO,
-      max_tokens: 2048,
+      max_tokens: 4096,                 // antes 2048 — output puede ser grande con muchos hallazgos
+      system: SKILL_UIIE_PROMPT,        // el SKILL como system prompt
       messages: [{ role: 'user', content: contentParts }],
     })
 

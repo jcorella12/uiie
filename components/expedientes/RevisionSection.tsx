@@ -65,6 +65,73 @@ function AlertNivel({ nivel }: { nivel: string }) {
   return <span className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2 py-0.5"><Info className="w-3 h-3" />Info</span>
 }
 
+const PRIORIDAD_LABEL: Record<number, string> = {
+  1: 'P1 — Documentos faltantes',
+  2: 'P2 — Razón social',
+  3: 'P3 — Dirección',
+  4: 'P4 — Capacidad',
+  5: 'P5 — Lista DACG',
+  6: 'P6 — Firmas',
+  7: 'P7 — Ficha de pago',
+  8: 'P8 — Aguas',
+}
+
+interface HallazgosBlockProps {
+  titulo:    string
+  color:     'red' | 'orange' | 'gray'
+  hallazgos: any[]
+  expedienteId: string
+}
+
+function HallazgosBlock({ titulo, color, hallazgos }: HallazgosBlockProps) {
+  const colorMap = {
+    red:    { box: 'bg-red-50 border-red-200',       text: 'text-red-900',    pill: 'bg-red-100 text-red-700' },
+    orange: { box: 'bg-orange-50 border-orange-200', text: 'text-orange-900', pill: 'bg-orange-100 text-orange-700' },
+    gray:   { box: 'bg-gray-50 border-gray-200',     text: 'text-gray-700',   pill: 'bg-gray-100 text-gray-600' },
+  }[color]
+
+  return (
+    <div className="space-y-2">
+      <p className={`text-xs font-bold uppercase tracking-wider ${colorMap.text}`}>{titulo}</p>
+      <div className="space-y-2">
+        {hallazgos.map((h, i) => (
+          <div key={i} className={`rounded-lg border p-3 space-y-1 ${colorMap.box}`}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${colorMap.pill}`}>
+                {PRIORIDAD_LABEL[h.prioridad] ?? `P${h.prioridad}`}
+              </span>
+              {h.documento_afectado && h.documento_afectado !== '—' && (
+                <span className="text-[10px] font-medium text-gray-500 bg-white px-1.5 py-0.5 rounded border border-gray-200">
+                  {h.documento_afectado}
+                </span>
+              )}
+            </div>
+            <p className="text-sm text-gray-800">{h.descripcion}</p>
+            {h.detalle && (h.detalle.valor_esperado || h.detalle.valor_encontrado) && (
+              <div className="text-xs text-gray-600 bg-white/70 rounded px-2 py-1 mt-1 font-mono">
+                {h.detalle.valor_esperado && <div>Esperado: <strong>{h.detalle.valor_esperado}</strong></div>}
+                {h.detalle.valor_encontrado && <div>Encontrado: <strong>{h.detalle.valor_encontrado}</strong></div>}
+              </div>
+            )}
+            {h.accion_requerida && (
+              <p className="text-xs text-gray-600 italic">→ {h.accion_requerida}</p>
+            )}
+            {h.notificar_inspector && (
+              <button
+                type="button"
+                onClick={() => alert('Notificación al inspector — disponible en la próxima fase')}
+                className="text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-full px-3 py-1 mt-1"
+              >
+                📨 Notificar al inspector
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Componente principal ──────────────────────────────────────────────────────
 
 export default function RevisionSection({
@@ -620,102 +687,142 @@ export default function RevisionSection({
         </span>
       </div>
 
-      {/* Resultado IA */}
-      {iaResult && (
-        <div className="rounded-xl border border-purple-200 bg-purple-50 overflow-hidden">
-          <button
-            onClick={() => setIaOpen(v => !v)}
-            className="w-full flex items-center justify-between px-4 py-3 bg-purple-100/60 hover:bg-purple-100 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <Brain className="w-4 h-4 text-purple-600" />
-              <span className="text-sm font-semibold text-purple-800">
-                Resultado de Revisión IA —&nbsp;
-                <span className={
-                  iaResult.resultado === 'aprobado' ? 'text-green-700'
-                  : iaResult.resultado === 'rechazado' ? 'text-red-700'
-                  : 'text-orange-700'
-                }>
-                  {iaResult.resultado === 'aprobado' ? 'Sin observaciones'
-                    : iaResult.resultado === 'rechazado' ? 'Requiere correcciones'
-                    : 'Con observaciones'}
+      {/* Resultado IA — soporta el nuevo schema (SKILL UIIE) y el viejo */}
+      {iaResult && (() => {
+        // Normalizamos para detectar formato nuevo vs viejo
+        const esFormatoNuevo = Array.isArray(iaResult.hallazgos)
+        const recomendacion = iaResult.recomendacion_final ?? iaResult.resultado
+        const recomendacionLabel =
+          recomendacion === 'aprobar' || recomendacion === 'aprobado' ? 'Listo para aprobar'
+          : recomendacion === 'rechazar' || recomendacion === 'rechazado' ? 'Requiere correcciones'
+          : 'Con observaciones'
+        const recomendacionColor =
+          recomendacion === 'aprobar' || recomendacion === 'aprobado' ? 'text-green-700'
+          : recomendacion === 'rechazar' || recomendacion === 'rechazado' ? 'text-red-700'
+          : 'text-orange-700'
+
+        // Bucketizar hallazgos por nivel (formato nuevo) o usar alertas (viejo)
+        const hallazgos: any[] = esFormatoNuevo
+          ? iaResult.hallazgos
+          : (iaResult.alertas ?? []).map((a: any) => ({
+              prioridad: a.nivel === 'error' ? 1 : a.nivel === 'advertencia' ? 4 : 8,
+              categoria: a.categoria,
+              nivel: a.nivel === 'error' ? 'critico' : a.nivel === 'advertencia' ? 'atencion' : 'aguas',
+              descripcion: a.descripcion,
+              accion_requerida: a.accion_requerida,
+            }))
+
+        const criticos = hallazgos.filter(h => h.nivel === 'critico').sort((a,b) => a.prioridad - b.prioridad)
+        const atencion = hallazgos.filter(h => h.nivel === 'atencion').sort((a,b) => a.prioridad - b.prioridad)
+        const aguas    = hallazgos.filter(h => h.nivel === 'aguas').sort((a,b) => a.prioridad - b.prioridad)
+
+        return (
+          <div className="rounded-xl border border-purple-200 bg-purple-50 overflow-hidden">
+            <button
+              onClick={() => setIaOpen(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-purple-100/60 hover:bg-purple-100 transition-colors"
+            >
+              <div className="flex items-center gap-2 text-left">
+                <Brain className="w-4 h-4 text-purple-600 shrink-0" />
+                <span className="text-sm font-semibold text-purple-800">
+                  Resultado de Revisión IA —&nbsp;
+                  <span className={recomendacionColor}>{recomendacionLabel}</span>
                 </span>
-              </span>
-            </div>
-            {iaOpen ? <ChevronUp className="w-4 h-4 text-purple-500" /> : <ChevronDown className="w-4 h-4 text-purple-500" />}
-          </button>
+                {hallazgos.length > 0 && (
+                  <span className="text-xs text-purple-600">
+                    · {criticos.length > 0 && `${criticos.length} críticos`}
+                    {criticos.length > 0 && atencion.length > 0 && ', '}
+                    {atencion.length > 0 && `${atencion.length} atención`}
+                    {(criticos.length + atencion.length) > 0 && aguas.length > 0 && ', '}
+                    {aguas.length > 0 && `${aguas.length} aguas`}
+                  </span>
+                )}
+              </div>
+              {iaOpen ? <ChevronUp className="w-4 h-4 text-purple-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-purple-500 shrink-0" />}
+            </button>
 
-          {iaOpen && (
-            <div className="p-4 space-y-4">
-              {/* Resumen */}
-              <p className="text-sm text-purple-900">{iaResult.resumen}</p>
+            {iaOpen && (
+              <div className="p-4 space-y-4">
+                {/* Header datos del expediente (si vienen del nuevo formato) */}
+                {esFormatoNuevo && (iaResult.folio || iaResult.cliente) && (
+                  <div className="text-xs text-purple-700 font-mono bg-white/70 rounded-lg px-3 py-2 border border-purple-100">
+                    {iaResult.folio && <span>Folio: <strong>{iaResult.folio}</strong></span>}
+                    {iaResult.cliente && <span> · Cliente: <strong>{iaResult.cliente}</strong></span>}
+                    {iaResult.fecha_visita && <span> · Visita: {iaResult.fecha_visita}</span>}
+                  </div>
+                )}
 
-              {/* Alertas */}
-              {iaResult.alertas?.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold text-purple-700 uppercase tracking-wider">
-                    Alertas ({iaResult.alertas.length})
-                  </p>
-                  {iaResult.alertas.map((a: any, i: number) => (
-                    <div key={i} className="bg-white rounded-lg border border-purple-100 p-3 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <AlertNivel nivel={a.nivel} />
-                        <span className="text-xs font-medium text-gray-500 capitalize">{a.categoria}</span>
-                      </div>
-                      <p className="text-sm text-gray-800">{a.descripcion}</p>
-                      {a.accion_requerida && (
-                        <p className="text-xs text-gray-500 italic">→ {a.accion_requerida}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+                {/* Resumen */}
+                {iaResult.resumen && <p className="text-sm text-purple-900">{iaResult.resumen}</p>}
 
-              {/* Puntos OK */}
-              {iaResult.puntos_ok?.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-green-700 uppercase tracking-wider mb-2">
-                    Puntos correctos
-                  </p>
-                  <ul className="space-y-1">
-                    {iaResult.puntos_ok.map((p: string, i: number) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-green-800">
-                        <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 text-green-500 shrink-0" />
-                        {p}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                {/* 🔴 Críticos (P1, P2, P5) */}
+                {criticos.length > 0 && (
+                  <HallazgosBlock
+                    titulo="🔴 Prioridad alta"
+                    color="red"
+                    hallazgos={criticos}
+                    expedienteId={expedienteId}
+                  />
+                )}
 
-              {/* Documentos faltantes */}
-              {iaResult.documentos_faltantes?.length > 0 && (
-                <div>
-                  <p className="text-xs font-semibold text-red-700 uppercase tracking-wider mb-2">
-                    Documentos faltantes
-                  </p>
-                  <ul className="space-y-1">
-                    {iaResult.documentos_faltantes.map((d: string, i: number) => (
-                      <li key={i} className="flex items-center gap-2 text-sm text-red-700">
-                        <FileX className="w-3.5 h-3.5 shrink-0" />
-                        {d}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+                {/* 🟡 Atención (P3, P4, P6, P7) */}
+                {atencion.length > 0 && (
+                  <HallazgosBlock
+                    titulo="🟡 Requiere atención"
+                    color="orange"
+                    hallazgos={atencion}
+                    expedienteId={expedienteId}
+                  />
+                )}
 
-              {/* Recomendación final */}
-              {iaResult.recomendacion_final && (
-                <div className="bg-purple-100 rounded-lg p-3 border border-purple-200">
-                  <p className="text-xs font-semibold text-purple-700 mb-1">Recomendación final</p>
-                  <p className="text-sm text-purple-900">{iaResult.recomendacion_final}</p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
+                {/* ⚠️ Aguas (P8) */}
+                {aguas.length > 0 && (
+                  <HallazgosBlock
+                    titulo="⚠️ Aguas (alertas menores)"
+                    color="gray"
+                    hallazgos={aguas}
+                    expedienteId={expedienteId}
+                  />
+                )}
+
+                {/* Documentos */}
+                {iaResult.documentos_faltantes?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-red-700 uppercase tracking-wider mb-2">
+                      📂 Documentos faltantes
+                    </p>
+                    <ul className="space-y-1">
+                      {iaResult.documentos_faltantes.map((d: string, i: number) => (
+                        <li key={i} className="flex items-center gap-2 text-sm text-red-700">
+                          <FileX className="w-3.5 h-3.5 shrink-0" />
+                          {d}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Puntos OK */}
+                {iaResult.puntos_ok?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-green-700 uppercase tracking-wider mb-2">
+                      ✅ Sin observaciones
+                    </p>
+                    <ul className="space-y-1">
+                      {iaResult.puntos_ok.map((p: string, i: number) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-green-800">
+                          <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 text-green-500 shrink-0" />
+                          {p}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       {/* Panel de decisión */}
       {!yaDecidido && status === 'revision' && (
