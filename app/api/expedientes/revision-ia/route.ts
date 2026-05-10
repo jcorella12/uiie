@@ -78,6 +78,49 @@ Documentos subidos al expediente (${docs.length} total):
 ${docs.map((d: any, i: number) => `  ${i + 1}. [${d.tipo}] "${d.nombre}" — subido: ${new Date(d.created_at).toLocaleDateString('es-MX')}`).join('\n')}
 `
 
+  // ── AGENDA del inspector — para validación de horarios y traslados (P8) ─
+  // Cargamos las inspecciones agendadas/realizadas del MISMO inspector
+  // dentro de una ventana de ±7 días de la fecha de inspección de este
+  // expediente. Si hay otras, se las pasamos a Claude para que valide
+  // empalmes y traslados según el SKILL.
+  let contextoAgenda = ''
+  const inspectorIdParaAgenda = exp.inspector_ejecutor_id ?? exp.inspector_id
+  if (inspectorIdParaAgenda && exp.fecha_inicio) {
+    const fechaCentro = new Date(exp.fecha_inicio + 'T12:00:00')
+    const desde = new Date(fechaCentro); desde.setDate(desde.getDate() - 7)
+    const hasta = new Date(fechaCentro); hasta.setDate(hasta.getDate() + 7)
+
+    const { data: agenda } = await db
+      .from('inspecciones_agenda')
+      .select(`
+        fecha_hora, duracion_min, status, direccion,
+        expediente:expedientes(numero_folio, ciudad, estado_mx, nombre_cliente_final)
+      `)
+      .or(`inspector_id.eq.${inspectorIdParaAgenda},inspector_ejecutor_id.eq.${inspectorIdParaAgenda}`)
+      .gte('fecha_hora', desde.toISOString())
+      .lte('fecha_hora', hasta.toISOString())
+      .neq('expediente_id', expediente_id)  // no incluir esta misma inspección
+      .order('fecha_hora', { ascending: true })
+
+    if (agenda && agenda.length > 0) {
+      const lineas = agenda.map((a: any) => {
+        const f = new Date(a.fecha_hora)
+        const expA = a.expediente as any
+        const ciudad = expA?.ciudad ? `${expA.ciudad}${expA.estado_mx ? ', ' + expA.estado_mx : ''}` : (a.direccion ?? '—')
+        const dur = a.duracion_min ?? 120
+        return `  · ${f.toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' })} — ${ciudad} (${dur} min, ${a.status}) — folio ${expA?.numero_folio ?? '—'}`
+      }).join('\n')
+      contextoAgenda = `
+
+AGENDA DEL INSPECTOR ${inspectorNombre} (otras inspecciones ±7 días):
+${lineas}
+
+NOTA: Aplica las reglas de "LÓGICA DE HORARIOS Y TRASLADOS" del SKILL para detectar empalmes o traslados imposibles. Reporta hallazgos como P8 (AGUAS).`
+    }
+  }
+  // Append agenda al contexto principal
+  const contextoFinal = contexto + contextoAgenda
+
   // Tomar hasta 12 documentos PDF/imagen para análisis profundo (antes 6).
   // Priorizamos los tipos clave del SKILL: OR, Dictamen, Acta, DACG,
   // Cotización, Plan, Recibo CFE, Comprobante, Foto medidor, Evidencia.
@@ -96,10 +139,10 @@ ${docs.map((d: any, i: number) => `  ${i + 1}. [${d.tipo}] "${d.nombre}" — sub
   // Construir contenido para Claude
   const contentParts: any[] = []
 
-  // Agregar contexto textual primero
+  // Agregar contexto textual primero (incluye agenda si la hay)
   contentParts.push({
     type: 'text',
-    text: `CONTEXTO DEL EXPEDIENTE:\n${contexto}\n\nA continuación se adjuntan los documentos para revisión:`,
+    text: `CONTEXTO DEL EXPEDIENTE:\n${contextoFinal}\n\nA continuación se adjuntan los documentos para revisión:`,
   })
 
   // Descargar y adjuntar documentos

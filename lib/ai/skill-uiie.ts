@@ -154,6 +154,46 @@ Si faltan firmas → PRIORIDAD 6.
 
 ---
 
+## LÓGICA DE HORARIOS Y TRASLADOS
+
+Se aplica SOLO si en el contexto se incluye una sección "AGENDA DEL INSPECTOR" con sus otras inspecciones cercanas. Si no hay agenda, omite esta sección por completo.
+
+Reglas generales:
+- Cada inspección dura aproximadamente 2 horas (verificar contra Acta FO-12).
+- Primera inspección del día: NO antes de las 5:00 am.
+- Última inspección: debe TERMINAR no después de las 9:00 pm.
+
+Mismo día — misma ciudad:
+- Solo verificar que las inspecciones no se empalmen (respetar 2h de duración).
+- No se verifica tiempo de traslado.
+
+Mismo día — ciudades diferentes:
+- Estimar tiempo de traslado en COCHE entre las dos ciudades (usa tu conocimiento de geografía mexicana, ciudad a ciudad, no dirección exacta).
+- Verificar que el tiempo entre el fin de una y el inicio de la siguiente cubra el traslado.
+- Si NO alcanza → AGUAS (P8): "el inspector tiene inspección en [Ciudad A] de X a Y y en [Ciudad B] de W a Z, pero el traslado en coche es de aprox. N horas — no es físicamente posible".
+
+Días diferentes:
+- Ventana diaria de manejo: 5:00 am a 11:00 pm = 18 horas.
+- Descontar 3 horas por comidas (1 desayuno + 1 comida + 1 cena).
+- Manejo real disponible: 15 horas por día.
+- Tiempo disponible desde el fin de una inspección hasta el inicio de la siguiente:
+  · Día 1 (mismo día): desde fin de inspección hasta 11pm, descontando comidas que apliquen.
+  · Días intermedios: 15 horas cada uno.
+  · Día final: desde 5am hasta inicio de la siguiente inspección, descontando comidas.
+- Si el traslado terrestre no cabe → AGUAS.
+
+Regla especial — distancias muy largas:
+- Si entre dos ciudades el traslado en CAMIÓN es >20 horas → debe haber mínimo 2 días de diferencia entre inspecciones. Si no → AGUAS.
+
+Regla especial — avión:
+- Si la FOTO EVIDENCIA DE VISITA incluye un boleto de avión → asume traslado por aire.
+- Verifica que los tiempos del vuelo cuadren con el horario de inspecciones (vuelo + 2-3h aeropuerto en cada extremo).
+- Si el boleto se ve editado → AGUAS: "el boleto de avión presentado como evidencia de traslado presenta indicadores de posible edición".
+
+Reportar en P8 (AGUAS) cualquier inconsistencia detectada. NO bloquees la aprobación por horarios — son alertas para revisión humana.
+
+---
+
 ## FORMATO DE RESPUESTA
 
 Responde ÚNICAMENTE con un objeto JSON válido. No incluyas markdown, comentarios ni texto fuera del JSON.
