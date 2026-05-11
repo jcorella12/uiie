@@ -10,14 +10,14 @@ function getLogoPath(): string | undefined {
   return fs.existsSync(p) ? p : undefined
 }
 
-import { TZ_MX } from '@/lib/utils'
+import { TZ_MX, tzForEstadoMx } from '@/lib/utils'
 
-function fmtFecha(iso: string): string {
+function fmtFecha(iso: string, tz: string = TZ_MX): string {
   return new Date(iso).toLocaleDateString('es-MX', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-    timeZone: TZ_MX,
+    timeZone: tz,
   })
 }
 
@@ -84,12 +84,15 @@ export async function GET(req: NextRequest) {
   ].filter(Boolean)
   const clienteDomicilio = domParts.length ? domParts.join(', ') : undefined
 
+  // TZ del estado donde se realiza la inspección (no asumir CDMX)
+  const tzExp = tzForEstadoMx(exp.estado_mx)
+
   const fechaVisita = inspeccion?.fecha_hora
-    ? fmtFecha(inspeccion.fecha_hora)
+    ? fmtFecha(inspeccion.fecha_hora, tzExp)
     : undefined
 
   const resolutFecha = exp.resolutivo_fecha
-    ? fmtFecha(exp.resolutivo_fecha)
+    ? fmtFecha(exp.resolutivo_fecha, tzExp)
     : undefined
 
   const datos: ContratoData = {
@@ -99,7 +102,7 @@ export async function GET(req: NextRequest) {
     // (el contrato se firma en/antes de la visita). Si aún no hay agenda,
     // fallback a hoy. Antes mostraba new Date() siempre, lo que producía
     // contratos fechados DESPUÉS de la visita ya realizada.
-    fecha: fmtFecha(inspeccion?.fecha_hora ?? new Date().toISOString()),
+    fecha: fmtFecha(inspeccion?.fecha_hora ?? new Date().toISOString(), tzExp),
     fecha_visita: fechaVisita,
 
     // Solicitante / cliente final

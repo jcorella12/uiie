@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { generarCotizacionDocx } from '@/lib/docx/CotizacionDocx'
-import { TZ_MX, isoMinusDays } from '@/lib/utils'
+import { TZ_MX, isoMinusDays, tzForEstadoMx } from '@/lib/utils'
 import path from 'path'
 import fs from 'fs'
 
@@ -69,7 +69,7 @@ export async function GET(req: NextRequest) {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
-      timeZone: TZ_MX,
+      timeZone: tzForEstadoMx((exp as any).estado_mx),
     }),
     cliente_nombre: (exp as any).nombre_cliente_final ?? cliente?.nombre ?? 'Cliente',
     cliente_rfc: cliente?.rfc,

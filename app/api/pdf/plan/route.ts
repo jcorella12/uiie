@@ -10,14 +10,14 @@ function getLogoPath(): string | undefined {
   return fs.existsSync(p) ? p : undefined
 }
 
-import { TZ_MX, isoMinusDays } from '@/lib/utils'
+import { TZ_MX, isoMinusDays, tzForEstadoMx } from '@/lib/utils'
 
-function fmtFecha(iso: string): string {
+function fmtFecha(iso: string, tz: string = TZ_MX): string {
   return new Date(iso).toLocaleDateString('es-MX', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-    timeZone: TZ_MX,
+    timeZone: tz,
   })
 }
 
@@ -62,20 +62,23 @@ export async function GET(req: NextRequest) {
   const cliente   = exp.cliente as any
   const inv       = exp.inversor as any
   const folio: string = (exp.folio as any)?.numero_folio ?? exp.numero_folio ?? id
+  // TZ del estado del expediente (no asumir CDMX para Sonora/BC/etc.)
+  const tzExp = tzForEstadoMx(exp.estado_mx)
 
   // Fecha de emisión del plan: si hay visita agendada, dos días antes
   // (el plan se entrega antes de la visita). Si no, hoy como fallback.
   const fechaEmision = fmtFecha(
     inspeccion?.fecha_hora
       ? isoMinusDays(inspeccion.fecha_hora, 2)
-      : new Date().toISOString()
+      : new Date().toISOString(),
+    tzExp,
   )
   const fechaVisita = inspeccion?.fecha_hora
-    ? fmtFecha(inspeccion.fecha_hora)
+    ? fmtFecha(inspeccion.fecha_hora, tzExp)
     : 'Fecha por confirmar'
 
   const resolutFecha = exp.resolutivo_fecha
-    ? fmtFecha(exp.resolutivo_fecha)
+    ? fmtFecha(exp.resolutivo_fecha, tzExp)
     : undefined
 
   const datos: PlanData = {

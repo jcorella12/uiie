@@ -5,7 +5,7 @@ import KPICard from '@/components/dashboard/KPICard'
 import EmptyState from '@/components/ui/EmptyState'
 import { StatusBadge, SOLICITUD_STATUS } from '@/components/ui/StatusBadge'
 import { formatCurrency } from '@/lib/pricing'
-import { formatDateShort } from '@/lib/utils'
+import { formatDateShort, tzForEstadoMx } from '@/lib/utils'
 import {
   FolderOpen, FileText, Calendar, Award, Clock, SearchCheck, RotateCcw,
   ArrowRight, AlertTriangle, Zap, Users, TrendingUp, ChevronRight,
@@ -147,7 +147,7 @@ export default async function DashboardInspector() {
       .order('created_at', { ascending: false })
       .limit(5),
     supabase.from('inspecciones_agenda')
-      .select('id, fecha_hora, direccion, status, expediente:expedientes(numero_folio, cliente:clientes(nombre))')
+      .select('id, fecha_hora, direccion, status, expediente:expedientes(numero_folio, estado_mx, cliente:clientes(nombre))')
       .or(`inspector_id.eq.${inspectorId},inspector_ejecutor_id.eq.${inspectorId}`)
       .gte('fecha_hora', new Date().toISOString())
       .order('fecha_hora', { ascending: true })
@@ -363,11 +363,12 @@ export default async function DashboardInspector() {
                 {proximasInspecciones.map((i) => {
                   const exp = i.expediente as any
                   const fecha = new Date(i.fecha_hora)
+                  const tz = tzForEstadoMx(exp?.estado_mx)
                   const hoyFlag = esHoy(i.fecha_hora)
-                  const dia = fecha.toLocaleDateString('es-MX', { day: '2-digit' })
-                  const mes = fecha.toLocaleDateString('es-MX', { month: 'short' }).replace('.', '')
-                  const hora = fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })
-                  const wd  = fecha.toLocaleDateString('es-MX', { weekday: 'short' }).replace('.', '')
+                  const dia = fecha.toLocaleDateString('es-MX', { day: '2-digit', timeZone: tz })
+                  const mes = fecha.toLocaleDateString('es-MX', { month: 'short', timeZone: tz }).replace('.', '')
+                  const hora = fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: tz })
+                  const wd  = fecha.toLocaleDateString('es-MX', { weekday: 'short', timeZone: tz }).replace('.', '')
                   return (
                     <li key={i.id}>
                       <Link

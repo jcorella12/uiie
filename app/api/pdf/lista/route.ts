@@ -23,12 +23,12 @@ async function loadHomologacionRedaccion(
   return data?.redaccion_lista ?? undefined
 }
 
-import { TZ_MX } from '@/lib/utils'
+import { TZ_MX, tzForEstadoMx } from '@/lib/utils'
 
-function fmtFecha(iso: string): string {
+function fmtFecha(iso: string, tz: string = TZ_MX): string {
   return new Date(iso).toLocaleDateString('es-MX', {
     year: 'numeric', month: 'long', day: 'numeric',
-    timeZone: TZ_MX,
+    timeZone: tz,
   })
 }
 
@@ -77,9 +77,11 @@ export async function GET(req: NextRequest) {
   const inspUser   = exp.inspector as any   // ahora es usuarios directamente
   const folio: string = (exp.folio as any)?.numero_folio ?? exp.numero_folio ?? id
 
+  // TZ del estado del expediente (Sonora UTC-7, BC UTC-8, etc.)
+  const tzExpediente = tzForEstadoMx(exp.estado_mx)
   const fechaBase = inspeccion?.fecha_hora ?? new Date().toISOString()
-  const horaStr = new Date(fechaBase).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ_MX })
-  const fecha = `${fmtFecha(fechaBase)}, ${horaStr} hrs`
+  const horaStr = new Date(fechaBase).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tzExpediente })
+  const fecha = `${fmtFecha(fechaBase, tzExpediente)}, ${horaStr} hrs`
 
   const datos: ListaData = {
     logoSrc: getLogoPath(),

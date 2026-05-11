@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
-import { formatDate, formatDateShort, EXPEDIENTE_STATUS_LABELS, INSPECCION_STATUS_LABELS } from '@/lib/utils'
+import { formatDate, formatDateShort, tzForEstadoMx, EXPEDIENTE_STATUS_LABELS, INSPECCION_STATUS_LABELS } from '@/lib/utils'
 import SubirDocumentosMasivo from '@/components/expedientes/SubirDocumentosMasivo'
 import SubirDocumentoForm from '@/components/expedientes/SubirDocumentoForm'
 import EliminarDocumentoBtn from '@/components/expedientes/EliminarDocumentoBtn'
@@ -184,6 +184,10 @@ export default async function ExpedienteDetailPage({
   const folioNumero: string =
     folio?.numero_folio ?? expediente.numero_folio ?? 'BORRADOR (sin folio asignado)'
   const sinFolioAsignado = !folio?.numero_folio && !expediente.numero_folio
+  // TZ del estado donde ocurre la inspección (Sonora UTC-7, BC UTC-8, etc.)
+  // para que todas las horas mostradas en el detalle del expediente
+  // coincidan con las del Acta y con la realidad del inspector.
+  const tzExpediente = tzForEstadoMx(expediente.estado_mx)
 
   // Inspector ejecutor de la próxima/última inspección (delegación)
   const ultimaInspeccion = (inspecciones ?? []).slice().reverse().find((i: any) =>
@@ -561,10 +565,14 @@ export default async function ExpedienteDetailPage({
                       <p className="text-base font-bold text-gray-900 mt-0.5 capitalize">
                         {fecha.toLocaleDateString('es-MX', {
                           weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+                          timeZone: tzExpediente,
                         })}
                       </p>
                       <p className="text-sm text-gray-700 font-medium">
-                        🕐 {fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })} hrs
+                        🕐 {fecha.toLocaleTimeString('es-MX', {
+                          hour: '2-digit', minute: '2-digit',
+                          timeZone: tzExpediente,
+                        })} hrs
                       </p>
                       {proxima.direccion && (
                         <p className="text-xs text-gray-500 mt-1">

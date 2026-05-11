@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ChevronLeft, ChevronRight, AlertTriangle, Lock, Calendar } from 'lucide-react'
 import Link from 'next/link'
+import { tzForEstadoMx } from '@/lib/utils'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type InspeccionAgenda = {
@@ -393,10 +394,12 @@ export function Calendario({ inspectorId, isAdmin = false, inspectores = [] }: P
                       const cliente  = ins.expediente?.cliente?.nombre ?? '—'
                       const ciudad   = ins.expediente?.ciudad ?? null
                       const estado   = ins.expediente?.estado_mx ?? null
+                      const tz       = tzForEstadoMx(estado)
                       const expId    = ins.expediente?.id
                       const fechaFmt = new Date(ins.fecha_hora).toLocaleString('es-MX', {
                         weekday: 'short', day: 'numeric', month: 'short',
                         hour: '2-digit', minute: '2-digit',
+                        timeZone: tz,
                       })
 
                       // En admin: color por inspector; individual: color por status
@@ -502,7 +505,8 @@ function ProximasInspecciones({
           const nombre  = ins.expediente?.cliente?.nombre ?? '—'
           const expId   = ins.expediente?.id
           const color   = getInspColor(ins.inspector?.id)
-          // ciudad/estado already on ins.expediente
+          // TZ del estado del expediente — Sonora UTC-7, BC UTC-8, etc.
+          const tz      = tzForEstadoMx(ins.expediente?.estado_mx)
 
           return (
             <div key={ins.id} className="flex items-center gap-4 py-2.5">
@@ -514,13 +518,13 @@ function ProximasInspecciones({
               {/* Fecha */}
               <div className="w-14 text-center flex-shrink-0">
                 <p className="text-xs text-gray-400 uppercase tracking-wide leading-none">
-                  {fecha.toLocaleDateString('es-MX', { month: 'short' })}
+                  {fecha.toLocaleDateString('es-MX', { month: 'short', timeZone: tz })}
                 </p>
                 <p className="text-2xl font-bold text-brand-green leading-none mt-0.5">
-                  {fecha.getDate()}
+                  {fecha.toLocaleDateString('es-MX', { day: 'numeric', timeZone: tz })}
                 </p>
                 <p className="text-xs text-gray-400 leading-none mt-0.5">
-                  {fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })}
+                  {fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: tz })}
                 </p>
               </div>
 

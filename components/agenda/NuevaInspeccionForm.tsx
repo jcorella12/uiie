@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, CheckCircle, Loader2, ArrowLeft, ChevronLeft, ChevronRight, UserCheck, X } from 'lucide-react'
 import Link from 'next/link'
+import { tzForEstadoMx } from '@/lib/utils'
 
 interface Expediente {
   id: string
@@ -106,7 +107,7 @@ function Calendario({
   // Texto del tooltip
   function buildTooltip(insps: InspeccionExistente[]) {
     return insps.map(ins => {
-      const hora = new Date(ins.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' })
+      const hora = new Date(ins.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: tzForEstadoMx(ins.estado) })
       const lugar = [ins.ciudad, ins.estado].filter(Boolean).join(', ')
       const folio = ins.numero_folio ?? ''
       const partes = [hora, folio, lugar].filter(Boolean)
@@ -200,7 +201,7 @@ function Calendario({
                       {count === 1 ? '1 inspección' : `${count} inspecciones`}
                     </p>
                     {insps.map((ins, idx) => {
-                      const hora  = new Date(ins.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' })
+                      const hora  = new Date(ins.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: tzForEstadoMx(ins.estado) })
                       const lugar = [ins.ciudad, ins.estado].filter(Boolean).join(', ')
                       return (
                         <div key={idx} className={idx > 0 ? 'mt-1.5 pt-1.5 border-t border-gray-700' : ''}>
@@ -436,7 +437,7 @@ export default function NuevaInspeccionForm({
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0 mt-1" />
                       <span>
                         <span className="font-mono font-medium">
-                          {new Date(ins.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Mexico_City' })}
+                          {new Date(ins.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', timeZone: tzForEstadoMx(ins.estado) })}
                         </span>
                         {ins.numero_folio && <span> — {ins.numero_folio}</span>}
                         {ins.cliente && <span className="text-amber-600"> · {ins.cliente}</span>}
