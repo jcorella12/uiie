@@ -10,7 +10,7 @@ function getLogoPath(): string | undefined {
   return fs.existsSync(p) ? p : undefined
 }
 
-import { TZ_MX } from '@/lib/utils'
+import { TZ_MX, tzForEstadoMx } from '@/lib/utils'
 
 function fmtFecha(iso: string): string {
   return new Date(iso).toLocaleDateString('es-MX', {
@@ -131,16 +131,21 @@ export async function GET(req: NextRequest) {
   const inspPerfil = inspUser?.perfil as any     // registro inspectores (cedula, firma, etc.)
   const folio: string = (exp.folio as any)?.numero_folio ?? exp.numero_folio ?? id
 
+  // Usar la timezone REAL del estado donde se hizo la inspección. Si no
+  // se hace, una visita en Hermosillo (UTC-7) capturada como 14:00 sale
+  // en el Acta como 15:00 porque CDMX es UTC-6 (1h de diferencia).
+  const tzExpediente = tzForEstadoMx(exp.estado_mx)
+
   const fechaInsp = inspeccion ? fmtFecha(inspeccion.fecha_hora) : fmtFecha(new Date().toISOString())
 
   const horaInicio = inspeccion
-    ? new Date(inspeccion.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ_MX })
+    ? new Date(inspeccion.fecha_hora).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tzExpediente })
     : '10:00'
 
   const durMin = inspeccion?.duracion_min ?? 120
   const horaFin = inspeccion
     ? new Date(new Date(inspeccion.fecha_hora).getTime() + durMin * 60_000)
-        .toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: TZ_MX })
+        .toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: tzExpediente })
     : '12:00'
 
   // Si la inspección tiene un inspector ejecutor diferente, usar ese nombre en el acta

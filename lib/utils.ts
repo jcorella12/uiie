@@ -45,6 +45,34 @@ export const INSPECCION_STATUS_LABELS: Record<InspeccionStatus, string> = {
 // como 3:00 PM (UTC) en documentos generados.
 export const TZ_MX = 'America/Mexico_City'
 
+/**
+ * Mapeo de estado mexicano → IANA timezone. México tiene varios husos:
+ *   - America/Mexico_City  (UTC-6, Centro) — la mayoría
+ *   - America/Hermosillo   (UTC-7 fijo, Sonora — sin DST)
+ *   - America/Mazatlan     (UTC-7, Pacífico — BCS, Sinaloa, Nayarit, Chihuahua)
+ *   - America/Tijuana      (UTC-8, Pacífico Norte — Baja California)
+ *   - America/Cancun       (UTC-5, Sureste — Quintana Roo)
+ *
+ * Desde oct 2022 México eliminó horario de verano (excepto frontera norte).
+ *
+ * Útil para renderizar horas de inspecciones que ocurren físicamente en
+ * estados con TZ distinta a CDMX. Si el estado es desconocido o null,
+ * devuelve TZ_MX (Centro) como fallback.
+ */
+export function tzForEstadoMx(estado: string | null | undefined): string {
+  if (!estado) return TZ_MX
+  const e = estado.trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')  // quitar acentos
+  if (e === 'sonora' || e === 'son' || e === 'so') return 'America/Hermosillo'
+  if (e === 'baja california' || e === 'bc' || e === 'baja california norte') return 'America/Tijuana'
+  if (e === 'baja california sur' || e === 'bcs' ||
+      e === 'sinaloa' || e === 'sin' ||
+      e === 'nayarit' || e === 'nay' ||
+      e === 'chihuahua' || e === 'chih') return 'America/Mazatlan'
+  if (e === 'quintana roo' || e === 'qroo' || e === 'q. roo') return 'America/Cancun'
+  return TZ_MX
+}
+
 export function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('es-MX', {
     year: 'numeric',
