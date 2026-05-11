@@ -180,8 +180,10 @@ export default async function ExpedienteDetailPage({
   const cliente = expediente.cliente as any
   const folio = expediente.folio as any
 
+  // Si es borrador SIN folio, mostramos placeholder claro en lugar de "—"
   const folioNumero: string =
-    folio?.numero_folio ?? expediente.numero_folio ?? '—'
+    folio?.numero_folio ?? expediente.numero_folio ?? 'BORRADOR (sin folio asignado)'
+  const sinFolioAsignado = !folio?.numero_folio && !expediente.numero_folio
 
   // Inspector ejecutor de la próxima/última inspección (delegación)
   const ultimaInspeccion = (inspecciones ?? []).slice().reverse().find((i: any) =>
@@ -224,10 +226,16 @@ export default async function ExpedienteDetailPage({
           {/* Left: folio + client */}
           <div className="space-y-1">
             <div className="flex items-center gap-3 flex-wrap">
-              <span className="font-mono text-xl font-bold text-brand-green tracking-wide">
-                {folioNumero}
-              </span>
-              {esAdmin && (
+              {sinFolioAsignado ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-700 border border-orange-200">
+                  📝 BORRADOR — Sin folio aún
+                </span>
+              ) : (
+                <span className="font-mono text-xl font-bold text-brand-green tracking-wide">
+                  {folioNumero}
+                </span>
+              )}
+              {esAdmin && !sinFolioAsignado && (
                 <EditarFolioBtn expedienteId={expediente.id} folioActual={folioNumero} />
               )}
               <StatusBadge status={expediente.status} dictionary={EXPEDIENTE_STATUS} size="sm" />
@@ -235,6 +243,11 @@ export default async function ExpedienteDetailPage({
             <p className="text-lg font-semibold text-gray-900">
               {cliente?.nombre ?? '—'}
             </p>
+            {sinFolioAsignado && (
+              <p className="text-xs text-orange-700 mt-1">
+                Puedes ir adelantando la info técnica. El folio se asignará cuando admin lo apruebe.
+              </p>
+            )}
           </div>
 
           {/* Right: meta */}

@@ -4,6 +4,7 @@ import { formatCurrency } from '@/lib/pricing'
 import { formatDateShort } from '@/lib/utils'
 import Link from 'next/link'
 import { Plus, FileText, AlertTriangle, TrendingUp } from 'lucide-react'
+import ComenzarBorradorBtn from '@/components/expedientes/ComenzarBorradorBtn'
 
 const COMISION_RESPONSABLE = 0.40  // 40% para Joaquín
 const COMISION_INSPECTOR   = 0.60  // 60% para el inspector
@@ -19,8 +20,36 @@ export default async function MisSolicitudes() {
   // RLS already filters by inspector_id = auth.uid()
   const { data: solicitudes } = await supabase
     .from('solicitudes_folio')
-    .select('id, cliente_nombre, propietario_nombre, kwp, precio_propuesto, porcentaje_precio, status, requiere_autorizacion, fecha_estimada, created_at, folio:folios_lista_control(numero_folio)')
+    .select('id, cliente_nombre, propietario_nombre, kwp, precio_propuesto, porcentaje_precio, status, requiere_autorizacion, fecha_estimada, created_at, folio_asignado_id, folio:folios_lista_control(numero_folio)')
     .order('created_at', { ascending: false })
+
+  // Para cada solicitud, ¿ya hay expediente (borrador o ya enlazado)?
+  // Mapeo solicitud_id → expediente_id para los botones de la columna acción.
+  const solicitudIds = (solicitudes ?? []).map(s => s.id)
+  const expBySolicitud: Record<string, string> = {}
+  if (solicitudIds.length > 0) {
+    const { data: expRel } = await supabase
+      .from('expedientes')
+      .select('id, solicitud_origen_id, folio_id')
+      .in('solicitud_origen_id', solicitudIds)
+    for (const e of expRel ?? []) {
+      if (e.solicitud_origen_id) expBySolicitud[e.solicitud_origen_id] = e.id
+    }
+    // También: si la solicitud tiene folio_asignado_id, buscar exp por folio
+    const foliosConSolic = (solicitudes ?? []).filter(s => s.folio_asignado_id)
+    if (foliosConSolic.length > 0) {
+      const { data: expsByFolio } = await supabase
+        .from('expedientes')
+        .select('id, folio_id')
+        .in('folio_id', foliosConSolic.map(s => s.folio_asignado_id).filter(Boolean) as string[])
+      for (const s of foliosConSolic) {
+        if (!expBySolicitud[s.id]) {
+          const exp = (expsByFolio ?? []).find(e => e.folio_id === s.folio_asignado_id)
+          if (exp) expBySolicitud[s.id] = exp.id
+        }
+      }
+    }
+  }
 
   const STATUS_BADGE: Record<string, string> = {
     pendiente: 'badge-pendiente', en_revision: 'badge-en_revision',
@@ -104,6 +133,7 @@ export default async function MisSolicitudes() {
                   <th className="text-left py-3 px-3 font-medium text-gray-500">Folio</th>
                   <th className="text-right py-3 px-3 font-medium text-gray-500">Fecha Est.</th>
                   <th className="text-right py-3 px-3 font-medium text-gray-500">Creada</th>
+                  <th className="text-right py-3 px-3 font-medium text-gray-500">Expediente</th>
                 </tr>
               </thead>
               <tbody>
@@ -144,6 +174,14 @@ export default async function MisSolicitudes() {
                       </td>
                       <td className="py-3 px-3 text-right text-gray-500">{formatDateShort(s.fecha_estimada)}</td>
                       <td className="py-3 px-3 text-right text-gray-400">{formatDateShort(s.created_at)}</td>
+                      <td className="py-3 px-3 text-right whitespace-nowrap">
+                        {s.status !== 'rechazada' && !isAuxiliar && (
+                          <ComenzarBorradorBtn
+                            solicitudId={s.id}
+                            expedienteExistente={expBySolicitud[s.id] ?? null}
+                          />
+                        )}
+                      </td>
                     </tr>
                   )
                 })}

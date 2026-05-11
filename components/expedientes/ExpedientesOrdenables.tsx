@@ -13,7 +13,9 @@ import BotonZipCompacto from './BotonZipCompacto'
 // ─── Types ────────────────────────────────────────────────────────────────────
 export interface ExpedienteRow {
   id: string
-  numero_folio: string
+  // numero_folio puede ser null si el expediente está en borrador sin folio
+  // todavía (inspector adelantando info técnica antes de que admin asigne)
+  numero_folio: string | null
   kwp: number | null
   status: string
   ciudad: string | null
@@ -625,7 +627,7 @@ function DraggableList({
                         <div className="flex items-center justify-end gap-1.5">
                           <BotonZipCompacto
                             expedienteId={exp.id}
-                            numeroFolio={exp.numero_folio}
+                            numeroFolio={exp.numero_folio ?? ''}
                             status={exp.status}
                             respaldoDescargadoAt={exp.respaldo_descargado_at ?? null}
                             respaldoArchivadoAt={exp.respaldo_archivado_at ?? null}
@@ -826,7 +828,7 @@ function DraggableList({
                   <div className="flex flex-col items-end justify-center gap-1.5 px-3 py-3 border-l border-gray-100">
                     <BotonZipCompacto
                       expedienteId={exp.id}
-                      numeroFolio={exp.numero_folio}
+                      numeroFolio={exp.numero_folio ?? ''}
                       status={exp.status}
                       respaldoDescargadoAt={exp.respaldo_descargado_at ?? null}
                       respaldoArchivadoAt={exp.respaldo_archivado_at ?? null}
@@ -1144,7 +1146,7 @@ function AdminView({
                       <div className="flex items-center justify-end gap-2">
                         <BotonZipCompacto
                           expedienteId={exp.id}
-                          numeroFolio={exp.numero_folio}
+                          numeroFolio={exp.numero_folio ?? ''}
                           status={exp.status}
                           respaldoDescargadoAt={exp.respaldo_descargado_at ?? null}
                           respaldoArchivadoAt={exp.respaldo_archivado_at ?? null}

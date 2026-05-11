@@ -114,21 +114,55 @@ export async function POST(request: NextRequest) {
       expInsert.nombre_cliente_final = (solicitud as any).propietario_nombre
     }
 
-    const { data: expCreado, error: expError } = await supabase
+    // Si el inspector ya creó un expediente borrador desde esta solicitud
+    // (sin folio aún), enlazamos en lugar de crear uno nuevo. Así
+    // preservamos toda la info técnica que ya cargó.
+    const { data: borradorExistente } = await supabase
       .from('expedientes')
-      .insert(expInsert)
-      .select('id')
-      .single()
+      .select('id, status')
+      .eq('solicitud_origen_id', solicitudId)
+      .is('folio_id', null)
+      .maybeSingle()
 
-    if (expError) {
-      console.error('[asignar-folio] Error creando expediente:', expError.message, expError.details, expError.hint)
-      // Retornamos error para que el admin sepa que el expediente no se creó
-      return NextResponse.json({
-        error: `Folio asignado pero falló la creación del expediente: ${expError.message}`,
-      }, { status: 500 })
+    let expCreado: { id: string } | null = null
+    if (borradorExistente) {
+      // UPDATE: enlazar folio + actualizar campos que faltaban
+      const updPayload: Record<string, any> = {
+        folio_id:     folioId,
+        numero_folio: folio.numero_folio,
+        // Preservamos status del borrador si ya lo movió el inspector,
+        // pero si seguía en 'borrador' lo subimos a 'en_proceso'
+        ...(borradorExistente.status === 'borrador' ? { status: 'en_proceso' } : {}),
+      }
+      const { error: updErr } = await supabase
+        .from('expedientes')
+        .update(updPayload)
+        .eq('id', borradorExistente.id)
+      if (updErr) {
+        console.error('[asignar-folio] Error linkeando borrador:', updErr.message)
+        return NextResponse.json({
+          error: `Folio asignado pero falló enlazar el borrador: ${updErr.message}`,
+        }, { status: 500 })
+      }
+      expCreado = { id: borradorExistente.id }
+      console.log('[asignar-folio] Expediente borrador linkeado:', borradorExistente.id)
+    } else {
+      // No hay borrador → crear expediente desde cero (flujo original)
+      expInsert.solicitud_origen_id = solicitudId
+      const { data: nuevo, error: expError } = await supabase
+        .from('expedientes')
+        .insert(expInsert)
+        .select('id')
+        .single()
+      if (expError) {
+        console.error('[asignar-folio] Error creando expediente:', expError.message, expError.details, expError.hint)
+        return NextResponse.json({
+          error: `Folio asignado pero falló la creación del expediente: ${expError.message}`,
+        }, { status: 500 })
+      }
+      expCreado = nuevo
+      console.log('[asignar-folio] Expediente creado:', expCreado?.id)
     }
-
-    console.log('[asignar-folio] Expediente creado:', expCreado?.id)
 
     // Send email notification (non-blocking — a failed email must not fail the assignment)
     const insp = solicitud.inspector as any
