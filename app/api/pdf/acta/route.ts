@@ -78,6 +78,10 @@ export async function GET(req: NextRequest) {
       cliente:clientes(*),
       folio:folios_lista_control(numero_folio),
       inversor:inversores!expedientes_inversor_id_fkey(marca, modelo, certificacion, justificacion_ieee1547),
+      inversores_lista:expediente_inversores(
+        id, orden, marca, modelo, cantidad, potencia_kw,
+        certificacion, justificacion_ieee1547
+      ),
       inspector:usuarios!inspector_id(
         nombre, apellidos,
         perfil:inspectores!usuario_id(numero_cedula, firma_url, sello_url)
@@ -213,7 +217,31 @@ export async function GET(req: NextRequest) {
     numero_serie_medidor:  (exp as any).numero_serie_medidor  ?? undefined,
     numero_cfe_medidor:    (exp as any).numero_cfe_medidor    ?? undefined,
 
-    // Inversores
+    // ── Inversores ───────────────────────────────────────────────────────────
+    // Multi-inversor: leemos expediente_inversores y resolvemos la redacción
+    // CNE para cada marca distinta. Si no hay filas (expediente viejo), caemos
+    // al campo único legacy.
+    inversores: await (async () => {
+      const lista = ((exp as any).inversores_lista as any[] ?? []).slice()
+        .sort((a, b) => (a.orden ?? 0) - (b.orden ?? 0))
+      if (lista.length === 0) return undefined
+      const out: import('@/lib/docx/inversores-redaccion').InversorRow[] = []
+      for (const r of lista) {
+        out.push({
+          marca: r.marca ?? '—',
+          modelo: r.modelo ?? '—',
+          cantidad: r.cantidad ?? 1,
+          potencia_kw: r.potencia_kw ?? null,
+          certificacion: (r.certificacion ?? 'ul1741') as any,
+          justificacion_ieee1547: r.justificacion_ieee1547 ?? null,
+          redaccion_cne: r.certificacion === 'homologado_cne'
+            ? (await loadHomologacionRedaccion(db, r.marca, 'acta')) ?? null
+            : null,
+        })
+      }
+      return out
+    })(),
+    // Legacy (compat): se llenan con la "fila principal" o con el catálogo viejo
     num_inversores:       exp.num_inversores ?? 1,
     marca_inversor:       inv?.marca ?? '—',
     modelo_inversor:      inv?.modelo ?? '—',

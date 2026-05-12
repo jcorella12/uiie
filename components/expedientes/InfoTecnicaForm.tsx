@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import CollapsibleSection from '@/components/ui/CollapsibleSection'
 import HomologacionInversorCard from '@/components/expedientes/HomologacionInversorCard'
+import InversoresEditor, { type InversorRowData } from '@/components/expedientes/InversoresEditor'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,6 +77,8 @@ interface Props {
   expediente: ExpedienteInfoFields
   cliente?: Cliente
   inversores: Inversor[]
+  /** Lista multi-inversor del expediente (de expediente_inversores). Si está vacía, se muestra solo el editor. */
+  inversoresExpediente?: InversorRowData[]
   readOnly?: boolean
 }
 
@@ -142,7 +145,7 @@ const selectCls = inputCls
 
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export default function InfoTecnicaForm({ expediente, cliente, inversores, readOnly }: Props) {
+export default function InfoTecnicaForm({ expediente, cliente, inversores, inversoresExpediente, readOnly }: Props) {
   const router = useRouter()
   const [editing, setEditing] = useState(false)
   const [pending, startTransition] = useTransition()
@@ -344,8 +347,36 @@ export default function InfoTecnicaForm({ expediente, cliente, inversores, readO
               <Row label="Potencia (kWp)"       value={expediente.kwp} />
               <Row label="Núm. paneles"          value={expediente.num_paneles} />
               <Row label="Potencia por panel (Wp)" value={expediente.potencia_panel_wp} />
-              <Row label="Inversor"             value={inversorActual ? `${inversorActual.marca} ${inversorActual.modelo} · ${inversorActual.potencia_kw} kW · ${inversorActual.fase}` : undefined} />
-              <Row label="Núm. inversores"       value={expediente.num_inversores} />
+              <div className="py-2">
+                <p className="text-xs font-medium text-gray-500 mb-1.5">Inversores</p>
+                {inversoresExpediente && inversoresExpediente.length > 0 ? (
+                  <div className="space-y-1">
+                    {inversoresExpediente.map((inv, i) => (
+                      <div key={i} className="text-sm text-gray-800 flex items-center gap-2">
+                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-[#0F6E56]/10 text-[#0F6E56] text-xs font-semibold">
+                          {inv.cantidad}
+                        </span>
+                        <span>{inv.marca} {inv.modelo}</span>
+                        {inv.potencia_kw != null && <span className="text-xs text-gray-500">· {inv.potencia_kw} kW</span>}
+                        <span className="text-[10px] uppercase tracking-wide text-gray-400">
+                          · {
+                            inv.certificacion === 'ul1741' ? 'UL 1741'
+                            : inv.certificacion === 'homologado_cne' ? 'Homologado CNE'
+                            : inv.certificacion === 'ieee1547' ? 'IEEE 1547'
+                            : 'Sin cert.'
+                          }
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : inversorActual ? (
+                  <p className="text-sm text-gray-800">
+                    {expediente.num_inversores ?? 1}× {inversorActual.marca} {inversorActual.modelo} · {inversorActual.potencia_kw} kW · {inversorActual.fase}
+                  </p>
+                ) : (
+                  <p className="text-sm text-gray-400">—</p>
+                )}
+              </div>
               <Row label="Tipo de conexión"      value={tipoConexionLabel} />
               <Row label="Tipo de central"       value={tipoCentralLabel} />
               <Row label="Número de medidor CFE"      value={expediente.numero_medidor} />
@@ -490,26 +521,9 @@ export default function InfoTecnicaForm({ expediente, cliente, inversores, readO
             <Field label="Potencia por panel (Wp)">
               <input type="number" step="1" min="0" value={form.potencia_panel_wp} onChange={set('potencia_panel_wp')} className={inputCls} placeholder="325" />
             </Field>
-            <Field label="Número de inversores">
-              <input type="number" min="1" value={form.num_inversores} onChange={set('num_inversores')} className={inputCls} placeholder="1" />
-            </Field>
-            <Field label="Inversor (catálogo)" full>
-              <select value={form.inversor_id} onChange={set('inversor_id')} className={selectCls}>
-                <option value="">— Sin seleccionar —</option>
-                {inversores.map(inv => (
-                  <option key={inv.id} value={inv.id}>
-                    {inv.marca} {inv.modelo} · {inv.potencia_kw} kW · {inv.fase}
-                  </option>
-                ))}
-              </select>
-              {form.inversor_id && (
-                <div className="mt-3">
-                  <HomologacionInversorCard
-                    marca={inversores.find(i => i.id === form.inversor_id)?.marca ?? null}
-                  />
-                </div>
-              )}
-            </Field>
+            {/* Inversores: el editor multi-modelo se renderiza fuera del FormGroup
+                grid para tener ancho completo. Se guarda con su propio botón porque
+                vive en una tabla aparte. */}
             <Field label="Tipo de conexión">
               <select value={form.tipo_conexion} onChange={set('tipo_conexion')} className={selectCls}>
                 {TIPO_CONEXION_OPTS.map(o => (
@@ -534,6 +548,21 @@ export default function InfoTecnicaForm({ expediente, cliente, inversores, readO
               <input type="text" value={form.numero_cfe_medidor} onChange={set('numero_cfe_medidor')} className={inputCls} placeholder="ej. A3B2C1" maxLength={10} />
             </Field>
           </FormGroup>
+
+          {/* Inversores (lista multi-modelo, persiste con su propio botón) */}
+          <div className="mb-5">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-3">
+              Inversores del proyecto
+            </p>
+            <p className="text-xs text-gray-500 mb-3">
+              Captura un renglón por cada modelo distinto. Si el proyecto tiene 8 Sungrow + 2 Huawei,
+              agrega dos filas. La acta y la lista de verificación lo redactan automáticamente.
+            </p>
+            <InversoresEditor
+              expedienteId={expediente.id}
+              initial={inversoresExpediente ?? []}
+            />
+          </div>
 
           {/* Subestación */}
           <FormGroup title="Subestación eléctrica">

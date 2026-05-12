@@ -17,6 +17,7 @@ import {
   ImageRun,
 } from 'docx'
 import fs from 'fs'
+import { descripcionParaPlan, type InversorRow } from './inversores-redaccion'
 
 export interface PlanData {
   logoSrc?: string
@@ -35,6 +36,8 @@ export interface PlanData {
   resolutivo_folio: string
   resolutivo_fecha?: string
   tipo_central: string
+  // Multi-inversor: lista completa preferente; si está vacío usa los campos legacy.
+  inversores?: InversorRow[]
   num_inversores?: number
   marca_inversor?: string
   modelo_inversor?: string
@@ -77,13 +80,16 @@ function para(
 }
 
 function invDesc(d: PlanData): string {
+  if (d.inversores && d.inversores.length > 0) {
+    return descripcionParaPlan(d.inversores)
+  }
   const n = d.num_inversores ?? 1
   const marca = d.marca_inversor ?? ''
   const modelo = d.modelo_inversor ?? ''
   if (n > 1) {
-    return `${n} inversores${marca ? ' ' + marca : ''}${modelo ? ' ' + modelo : ''}`
+    return `${n} inversores${marca ? ' marca ' + marca : ''}${modelo ? ' modelo ' + modelo : ''}`
   }
-  return `inversor${marca ? ' ' + marca : ''}${modelo ? ' ' + modelo : ''}`
+  return `1 inversor${marca ? ' marca ' + marca : ''}${modelo ? ' modelo ' + modelo : ''}`
 }
 
 // ─── main export ─────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 import {
   Document, Page, Text, View, StyleSheet, Image,
 } from '@react-pdf/renderer'
+import { descripcionParaPlan, type InversorRow } from '@/lib/docx/inversores-redaccion'
 
 // ─── Interface ────────────────────────────────────────────────────────────────
 
@@ -21,6 +22,8 @@ export interface PlanData {
   resolutivo_folio: string
   resolutivo_fecha?: string       // "15 de enero de 2026"
   tipo_central: string            // 'MT' | 'BT'
+  // Multi-inversor (preferente). Sin lista cae al modo legacy.
+  inversores?: InversorRow[]
   num_inversores?: number
   marca_inversor?: string
   modelo_inversor?: string
@@ -224,9 +227,11 @@ export function PlanInspeccionDoc({ datos }: Props) {
   const tipoCentral = datos.tipo_central?.toUpperCase() === 'BT' ? 'Baja Tensión (BT)' : 'Media Tensión (MT)'
   const resolutFecha = datos.resolutivo_fecha ?? 'fecha no indicada'
 
-  const invDesc = datos.num_inversores
-    ? `${datos.num_inversores} inversor${datos.num_inversores > 1 ? 'es' : ''}${datos.marca_inversor ? ` marca ${datos.marca_inversor}` : ''}${datos.modelo_inversor ? ` modelo ${datos.modelo_inversor}` : ''}`
-    : 'inversores'
+  const invDesc = (datos.inversores && datos.inversores.length > 0)
+    ? descripcionParaPlan(datos.inversores)
+    : datos.num_inversores
+      ? `${datos.num_inversores} inversor${datos.num_inversores > 1 ? 'es' : ''}${datos.marca_inversor ? ` marca ${datos.marca_inversor}` : ''}${datos.modelo_inversor ? ` modelo ${datos.modelo_inversor}` : ''}`
+      : 'inversores'
 
   return (
     <Document>

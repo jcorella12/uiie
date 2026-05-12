@@ -129,6 +129,7 @@ export default async function ExpedienteDetailPage({
     { data: testigosCatalogo },
     { data: certificadosCNE },
     { data: solicitudPrecio },
+    { data: inversoresExpediente },
   ] = await Promise.all([
     db
       .from('documentos_expediente')
@@ -176,6 +177,11 @@ export default async function ExpedienteDetailPage({
       .select('precio_propuesto')
       .eq('folio_asignado_id', (expediente as any).folio_id)
       .maybeSingle(),
+    db
+      .from('expediente_inversores')
+      .select('id, orden, inversor_id, marca, modelo, cantidad, potencia_kw, certificacion, justificacion_ieee1547')
+      .eq('expediente_id', params.id)
+      .order('orden'),
   ])
 
   const cliente = expediente.cliente as any
@@ -439,6 +445,16 @@ export default async function ExpedienteDetailPage({
             atiende_telefono:   cliente.atiende_telefono,
           } : undefined}
           inversores={inversoresCatalogo ?? []}
+          inversoresExpediente={(inversoresExpediente ?? []).map((r: any) => ({
+            id: r.id,
+            inversor_id: r.inversor_id,
+            marca: r.marca ?? '',
+            modelo: r.modelo ?? '',
+            cantidad: r.cantidad ?? 1,
+            potencia_kw: r.potencia_kw ?? null,
+            certificacion: r.certificacion ?? 'ul1741',
+            justificacion_ieee1547: r.justificacion_ieee1547 ?? null,
+          }))}
           readOnly={['cerrado', 'aprobado'].includes(expediente.status)}
         />
 

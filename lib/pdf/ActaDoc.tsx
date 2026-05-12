@@ -1,6 +1,10 @@
 import {
   Document, Page, Text, View, StyleSheet, Image,
 } from '@react-pdf/renderer'
+import {
+  textoActaInversores,
+  type InversorRow,
+} from '@/lib/docx/inversores-redaccion'
 
 // ─── Interface ────────────────────────────────────────────────────────────────
 
@@ -53,7 +57,8 @@ export interface ActaData {
   // Medidor
   numero_medidor: string
 
-  // Inversores
+  // Inversores (lista preferente; campos sueltos quedan por compat)
+  inversores?: InversorRow[]
   num_inversores: number
   marca_inversor: string
   modelo_inversor: string
@@ -290,30 +295,19 @@ const s = StyleSheet.create({
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function textoInversor(d: ActaData): string {
-  const n = d.num_inversores
-  const marca = d.marca_inversor.toUpperCase()
-  const modelo = d.modelo_inversor.toUpperCase()
-  const plural = n > 1
-
-  if (d.certificacion_inversor === 'ul1741') {
-    return (
-      `${plural ? `LOS ${n} INVERSORES ${marca} ${modelo} CUENTAN CON` : `EL INVERSOR ${marca} ${modelo} CUENTA CON`} ` +
-      `certificado internacional UL1741 por lo cual CUMPLE con los requerimientos establecidos en las DACGS para interconexión a la red. ` +
-      `${plural ? 'Los inversores cuentan con' : 'El inversor cuenta con'} certificados emitidos por laboratorios extranjeros o nacionales, los cuales demuestran el cumplimiento con las características para interconexión.`
-    )
+  if (d.inversores && d.inversores.length > 0) {
+    return textoActaInversores(d.inversores)
   }
-  if (d.certificacion_inversor === 'ieee1547') {
-    const justif = d.justificacion_ieee1547 ?? 'El fabricante no tramitó la certificación UL1741 para este modelo en el mercado mexicano'
-    return (
-      `EL INVERSOR ${marca} ${modelo} NO CUENTA CON certificación UL1741. ${justif}. ` +
-      `Sin embargo, cuenta con certificación IEEE 1547 por lo cual CUMPLE con los requerimientos establecidos en las DACGS para interconexión. ` +
-      `El inversor cuenta con certificados emitidos por laboratorios extranjeros o nacionales que demuestran el cumplimiento con las características para interconexión.`
-    )
+  // Legacy: el ActaDoc viejo no soporta 'homologado_cne' en su union literal,
+  // así que ampliamos al castear al helper compartido.
+  const fila: InversorRow = {
+    marca: d.marca_inversor,
+    modelo: d.modelo_inversor,
+    cantidad: d.num_inversores ?? 1,
+    certificacion: d.certificacion_inversor as InversorRow['certificacion'],
+    justificacion_ieee1547: d.justificacion_ieee1547 ?? null,
   }
-  return (
-    `EL INVERSOR ${marca} ${modelo} NO CUENTA CON certificación UL1741 ni IEEE 1547. ` +
-    `Se levanta reporte de hallazgos adjunto al presente acta.`
-  )
+  return textoActaInversores([fila])
 }
 
 // ─── Componente ───────────────────────────────────────────────────────────────

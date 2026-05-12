@@ -17,6 +17,10 @@ import {
   ImageRun,
   HeadingLevel,
 } from 'docx'
+import {
+  textoActaInversores,
+  type InversorRow,
+} from './inversores-redaccion'
 
 // ─── Interface ────────────────────────────────────────────────────────────────
 
@@ -58,6 +62,10 @@ export interface ActaData {
   numero_medidor: string
   numero_serie_medidor?: string
   numero_cfe_medidor?: string
+  // Multi-inversores: lista completa de modelos del proyecto. Si está vacía
+  // o ausente, se cae al modo legacy con los campos `marca_inversor`/`modelo_inversor`/etc.
+  inversores?: InversorRow[]
+  // ── Campos legacy (single-inversor) — se mantienen para retrocompat ──
   num_inversores: number
   marca_inversor: string
   modelo_inversor: string
@@ -146,44 +154,20 @@ function separatorPara(): Paragraph {
 }
 
 function textoInversor(d: ActaData): string {
-  const n = d.num_inversores
-  const marca = d.marca_inversor.toUpperCase()
-  const modelo = d.modelo_inversor.toUpperCase()
-  const plural = n > 1
-
-  if (d.certificacion_inversor === 'ul1741') {
-    return (
-      `${plural ? `LOS ${n} INVERSORES ${marca} ${modelo} CUENTAN CON` : `EL INVERSOR ${marca} ${modelo} CUENTA CON`} ` +
-      `certificado internacional UL1741 por lo cual CUMPLE con los requerimientos establecidos en las DACGS para interconexión a la red. ` +
-      `${plural ? 'Los inversores cuentan con' : 'El inversor cuenta con'} certificados emitidos por laboratorios extranjeros o nacionales, los cuales demuestran el cumplimiento con las características para interconexión.`
-    )
+  // Multi-inversor: usar la lista completa si viene poblada.
+  if (d.inversores && d.inversores.length > 0) {
+    return textoActaInversores(d.inversores)
   }
-  if (d.certificacion_inversor === 'homologado_cne') {
-    // Si el endpoint pasó la redacción ya armada (de la tabla inversor_homologaciones), usarla
-    if (d.homologacion_redaccion) return d.homologacion_redaccion
-    // Fallback genérico
-    return (
-      `${plural ? `LOS ${n} INVERSORES ${marca} ${modelo}` : `EL INVERSOR ${marca} ${modelo}`} ` +
-      `está HOMOLOGADO A UL 1741 mediante el oficio F00.06.UE/225/2026 emitido por la Comisión Nacional de Energía (CNE) ` +
-      `el 28 de enero de 2026, en el cual se acredita el cumplimiento de los parámetros de la Tabla 5 de la RES/142/2017 ` +
-      `mediante reportes de pruebas operativas conforme a IEEE 1547 e IEC 61727. ` +
-      `Por lo anterior CUMPLE con los requerimientos establecidos en las DACGS para interconexión a la red.`
-    )
+  // Fallback legacy: construir un único inversor a partir de los campos planos.
+  const fila: InversorRow = {
+    marca:                  d.marca_inversor,
+    modelo:                 d.modelo_inversor,
+    cantidad:               d.num_inversores ?? 1,
+    certificacion:          d.certificacion_inversor,
+    justificacion_ieee1547: d.justificacion_ieee1547 ?? null,
+    redaccion_cne:          d.homologacion_redaccion ?? null,
   }
-  if (d.certificacion_inversor === 'ieee1547') {
-    const justif =
-      d.justificacion_ieee1547 ??
-      'El fabricante no tramitó la certificación UL1741 para este modelo en el mercado mexicano'
-    return (
-      `EL INVERSOR ${marca} ${modelo} NO CUENTA CON certificación UL1741. ${justif}. ` +
-      `Sin embargo, cuenta con certificación IEEE 1547 por lo cual CUMPLE con los requerimientos establecidos en las DACGS para interconexión. ` +
-      `El inversor cuenta con certificados emitidos por laboratorios extranjeros o nacionales que demuestran el cumplimiento con las características para interconexión.`
-    )
-  }
-  return (
-    `EL INVERSOR ${marca} ${modelo} NO CUENTA CON certificación UL1741 ni IEEE 1547. ` +
-    `Se levanta reporte de hallazgos adjunto al presente acta.`
-  )
+  return textoActaInversores([fila])
 }
 
 // ─── Header table builder ─────────────────────────────────────────────────────

@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef } from 'react'
 import {
   CheckCircle2, Upload, X, Loader2, FileText, Image, File,
-  AlertCircle, Search, ChevronDown, Award, AlertTriangle,
+  AlertCircle,
 } from 'lucide-react'
+import InversoresEditor, { type InversorRowData } from '@/components/expedientes/InversoresEditor'
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -31,21 +32,13 @@ interface ClienteDoc {
   publicUrl?: string | null
 }
 
-interface CatalogInversor {
-  id:               string
-  marca:            string
-  modelo:           string
-  potencia_kw:      number
-  certificacion:    string
-  certificado_url:  string | null
-  fase:             string
-}
-
 interface Props {
   expedienteId: string
   isLocked:     boolean
   saved?:       SavedData
   clienteDocs?: ClienteDoc[]
+  /** Lista multi-inversor preexistente (de expediente_inversores). */
+  inversoresExpediente?: InversorRowData[]
 }
 
 // ─── Document slots ───────────────────────────────────────────────────────────
@@ -78,211 +71,18 @@ const CERT_LABEL: Record<string, string> = {
   ninguna:  'Sin cert.',
 }
 
-// ─── InversorSelector ─────────────────────────────────────────────────────────
-
-function InversorSelector({
-  initialId,
-  onSelect,
-}: {
-  initialId?: string | null
-  onSelect: (inv: CatalogInversor | null) => void
-}) {
-  const [query,    setQuery]    = useState('')
-  const [results,  setResults]  = useState<CatalogInversor[]>([])
-  const [open,     setOpen]     = useState(false)
-  const [loading,  setLoading]  = useState(false)
-  const [selected, setSelected] = useState<CatalogInversor | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const inputRef     = useRef<HTMLInputElement>(null)
-
-  // Load initial inversor from catalog on mount
-  useEffect(() => {
-    if (!initialId) return
-    fetch(`/api/cliente/inversores/buscar?id=${initialId}`)
-      .then(r => r.json())
-      .then(d => {
-        if (d.inversor) { setSelected(d.inversor); onSelect(d.inversor) }
-      })
-      .catch(() => {})
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Debounced search
-  useEffect(() => {
-    const t = setTimeout(async () => {
-      if (!open) return
-      setLoading(true)
-      try {
-        const res = await fetch(`/api/cliente/inversores/buscar?q=${encodeURIComponent(query)}`)
-        const d = await res.json()
-        setResults(d.inversores ?? [])
-      } catch { setResults([]) }
-      finally { setLoading(false) }
-    }, 250)
-    return () => clearTimeout(t)
-  }, [query, open])
-
-  // Load top results when dropdown opens
-  useEffect(() => {
-    if (open && results.length === 0 && !loading) {
-      fetch('/api/cliente/inversores/buscar?q=')
-        .then(r => r.json())
-        .then(d => setResults(d.inversores ?? []))
-        .catch(() => {})
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open])
-
-  // Close on outside click
-  useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', onClickOutside)
-    return () => document.removeEventListener('mousedown', onClickOutside)
-  }, [])
-
-  function pick(inv: CatalogInversor) {
-    setSelected(inv)
-    onSelect(inv)
-    setOpen(false)
-    setQuery('')
-  }
-
-  function clear() {
-    setSelected(null)
-    onSelect(null)
-    setQuery('')
-    setTimeout(() => inputRef.current?.focus(), 0)
-  }
-
-  const certColor = (c: string) =>
-    c === 'ul1741' ? 'bg-green-100 text-green-700' :
-    c === 'ieee1547' ? 'bg-blue-100 text-blue-700' :
-    'bg-gray-100 text-gray-500'
-
-  // ── Selected card ──────────────────────────────────────────────────────────
-  if (selected) {
-    return (
-      <div className="rounded-xl border border-[#0F6E56]/30 bg-green-50 p-4 flex items-start gap-3">
-        <div className="w-8 h-8 rounded-lg bg-[#0F6E56]/10 flex items-center justify-center flex-shrink-0">
-          <Award className="w-4 h-4 text-[#0F6E56]" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-gray-900 text-sm">{selected.marca} {selected.modelo}</p>
-          <div className="flex flex-wrap items-center gap-2 mt-1">
-            <span className="text-xs text-gray-500">{selected.potencia_kw} kW · {selected.fase}</span>
-            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${certColor(selected.certificacion)}`}>
-              {CERT_LABEL[selected.certificacion] ?? selected.certificacion}
-            </span>
-            {selected.certificado_url ? (
-              <span className="text-xs text-green-700 font-medium flex items-center gap-1">
-                <CheckCircle2 className="w-3 h-3" /> Certificado disponible en el sistema
-              </span>
-            ) : (
-              <span className="text-xs text-amber-700 font-medium flex items-center gap-1">
-                <AlertTriangle className="w-3 h-3" /> Sin certificado — sube el tuyo abajo
-              </span>
-            )}
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={clear}
-          className="text-gray-400 hover:text-gray-600 transition-colors p-1 flex-shrink-0"
-          title="Cambiar inversor"
-        >
-          <X className="w-4 h-4" />
-        </button>
-      </div>
-    )
-  }
-
-  // ── Search input + dropdown ────────────────────────────────────────────────
-  return (
-    <div ref={containerRef} className="relative">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-        <input
-          ref={inputRef}
-          type="text"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-          onFocus={() => setOpen(true)}
-          placeholder="Buscar por marca o modelo…"
-          className="w-full pl-9 pr-10 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0F6E56]/30 focus:border-[#0F6E56]"
-        />
-        <ChevronDown className={`absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none transition-transform ${open ? 'rotate-180' : ''}`} />
-      </div>
-
-      {open && (
-        <div className="absolute z-30 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-xl overflow-hidden">
-          {loading ? (
-            <div className="flex items-center justify-center py-6 gap-2 text-sm text-gray-400">
-              <Loader2 className="w-4 h-4 animate-spin" /> Buscando…
-            </div>
-          ) : results.length === 0 ? (
-            <div className="py-8 text-center text-sm text-gray-400">
-              <p>No se encontraron inversores para <span className="font-medium">"{query}"</span></p>
-              <p className="text-xs mt-1">Ingresa los datos manualmente abajo</p>
-            </div>
-          ) : (
-            <ul className="max-h-56 overflow-y-auto divide-y divide-gray-50">
-              {results.map(inv => (
-                <li key={inv.id}>
-                  <button
-                    type="button"
-                    onClick={() => pick(inv)}
-                    className="w-full text-left px-4 py-3 hover:bg-gray-50 transition-colors flex items-center justify-between gap-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-gray-900 truncate">{inv.marca} {inv.modelo}</p>
-                      <p className="text-xs text-gray-500 mt-0.5">{inv.potencia_kw} kW · {inv.fase}</p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${certColor(inv.certificacion)}`}>
-                        {CERT_LABEL[inv.certificacion] ?? inv.certificacion}
-                      </span>
-                      {inv.certificado_url && (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-green-500" aria-label="Certificado disponible" />
-                      )}
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 // ─── Componente principal ─────────────────────────────────────────────────────
 
-export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clienteDocs }: Props) {
-  // ── Inversor catalog state ──────────────────────────────────────────────────
-  // mode: 'catalog' = use dropdown; 'manual' = free text
-  const [inversorMode, setInversorMode] = useState<'catalog' | 'manual'>(() => {
-    if (saved?.cli_inversor_id) return 'catalog'
-    if (saved?.cli_marca_inversor && !saved?.cli_inversor_id) return 'manual'
-    return 'catalog'
-  })
-  const [catalogInversor, setCatalogInversor] = useState<CatalogInversor | null>(null)
-
+export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clienteDocs, inversoresExpediente }: Props) {
   // ── Form state ──────────────────────────────────────────────────────────────
+  // Los campos cli_inversor_id/cli_marca_inversor/etc. ya no se editan aquí —
+  // ahora viven en `expediente_inversores` (lista multi). Lo único que dejamos
+  // es paneles, medidor, dirección y notas.
   const [form, setForm] = useState({
     cli_marca_paneles:     saved?.cli_marca_paneles     ?? '',
     cli_modelo_paneles:    saved?.cli_modelo_paneles    ?? '',
     cli_num_paneles:       saved?.cli_num_paneles       != null ? String(saved.cli_num_paneles)       : '',
     cli_potencia_panel_wp: saved?.cli_potencia_panel_wp != null ? String(saved.cli_potencia_panel_wp) : '',
-    // Manual inversor fields (only used when mode === 'manual')
-    cli_marca_inversor:    saved?.cli_marca_inversor    ?? '',
-    cli_modelo_inversor:   saved?.cli_modelo_inversor   ?? '',
-    cli_capacidad_kw:      saved?.cli_capacidad_kw      != null ? String(saved.cli_capacidad_kw)      : '',
-    cli_num_inversores:    saved?.cli_num_inversores    != null ? String(saved.cli_num_inversores)    : '',
     cli_num_medidor:       saved?.cli_num_medidor       ?? '',
     cli_direccion:         saved?.cli_direccion         ?? '',
     cli_notas:             saved?.cli_notas             ?? '',
@@ -303,8 +103,9 @@ export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clie
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => setForm(prev => ({ ...prev, [key]: e.target.value }))
 
-  // Whether the selected catalog inversor already has a cert → hide client cert upload
-  const catalogHasCert = inversorMode === 'catalog' && !!catalogInversor?.certificado_url
+  // Si alguno de los inversores capturados tiene `inversor_id` con certificado
+  // en el sistema (catálogo), ocultamos el slot de subida de certificado.
+  const catalogHasCert = (inversoresExpediente ?? []).some(i => !!i.inversor_id)
 
   // ── Save form ────────────────────────────────────────────────────────────────
   async function handleSave(e: React.FormEvent) {
@@ -323,18 +124,13 @@ export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clie
           cli_modelo_paneles:    form.cli_modelo_paneles    || null,
           cli_num_paneles:       form.cli_num_paneles       ? Number(form.cli_num_paneles)       : null,
           cli_potencia_panel_wp: form.cli_potencia_panel_wp ? Number(form.cli_potencia_panel_wp) : null,
-          // Inversor: catalog reference takes precedence over manual fields
-          cli_inversor_id:       inversorMode === 'catalog' ? (catalogInversor?.id ?? null) : null,
-          cli_marca_inversor:    inversorMode === 'catalog'
-            ? (catalogInversor?.marca ?? null)
-            : (form.cli_marca_inversor || null),
-          cli_modelo_inversor:   inversorMode === 'catalog'
-            ? (catalogInversor?.modelo ?? null)
-            : (form.cli_modelo_inversor || null),
-          cli_capacidad_kw:      inversorMode === 'catalog'
-            ? (catalogInversor?.potencia_kw ?? (form.cli_capacidad_kw ? Number(form.cli_capacidad_kw) : null))
-            : (form.cli_capacidad_kw ? Number(form.cli_capacidad_kw) : null),
-          cli_num_inversores:    form.cli_num_inversores    ? Number(form.cli_num_inversores)    : null,
+          // Los datos del/los inversor(es) ahora viven en expediente_inversores;
+          // nulificamos los campos cli_* legacy para no dejar info contradictoria.
+          cli_inversor_id:       null,
+          cli_marca_inversor:    null,
+          cli_modelo_inversor:   null,
+          cli_capacidad_kw:      null,
+          cli_num_inversores:    null,
           cli_num_medidor:       form.cli_num_medidor       || null,
           cli_direccion:         form.cli_direccion         || null,
           cli_notas:             form.cli_notas             || null,
@@ -436,9 +232,26 @@ export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clie
               {saved?.cli_modelo_paneles && <div><p className="label text-xs">Modelo paneles</p><p className="text-gray-800">{saved.cli_modelo_paneles}</p></div>}
               {saved?.cli_num_paneles != null && <div><p className="label text-xs">Cantidad paneles</p><p className="text-gray-800">{saved.cli_num_paneles}</p></div>}
               {saved?.cli_potencia_panel_wp != null && <div><p className="label text-xs">Potencia por panel (Wp)</p><p className="text-gray-800">{saved.cli_potencia_panel_wp}</p></div>}
-              {saved?.cli_marca_inversor && <div><p className="label text-xs">Inversor</p><p className="text-gray-800">{saved.cli_marca_inversor} {saved.cli_modelo_inversor}</p></div>}
-              {saved?.cli_capacidad_kw != null && <div><p className="label text-xs">Capacidad total (kW)</p><p className="text-gray-800">{saved.cli_capacidad_kw}</p></div>}
-              {saved?.cli_num_inversores != null && <div><p className="label text-xs">Cantidad inversores</p><p className="text-gray-800">{saved.cli_num_inversores}</p></div>}
+              {/* Lista multi-inversor */}
+              {(inversoresExpediente && inversoresExpediente.length > 0) ? (
+                <div className="col-span-2">
+                  <p className="label text-xs">Inversores</p>
+                  <div className="space-y-1 mt-1">
+                    {inversoresExpediente.map((inv, i) => (
+                      <p key={i} className="text-gray-800 text-sm">
+                        <strong>{inv.cantidad}×</strong> {inv.marca} {inv.modelo}
+                        {inv.potencia_kw != null && <span className="text-gray-500"> · {inv.potencia_kw} kW</span>}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {saved?.cli_marca_inversor && <div><p className="label text-xs">Inversor</p><p className="text-gray-800">{saved.cli_marca_inversor} {saved.cli_modelo_inversor}</p></div>}
+                  {saved?.cli_capacidad_kw != null && <div><p className="label text-xs">Capacidad total (kW)</p><p className="text-gray-800">{saved.cli_capacidad_kw}</p></div>}
+                  {saved?.cli_num_inversores != null && <div><p className="label text-xs">Cantidad inversores</p><p className="text-gray-800">{saved.cli_num_inversores}</p></div>}
+                </>
+              )}
               {saved?.cli_num_medidor && <div className="col-span-2"><p className="label text-xs">Número de medidor CFE</p><p className="text-gray-800">{saved.cli_num_medidor}</p></div>}
               {saved?.cli_direccion && <div className="col-span-2"><p className="label text-xs">Dirección</p><p className="text-gray-800">{saved.cli_direccion}</p></div>}
               {saved?.cli_notas && <div className="col-span-2"><p className="label text-xs">Notas</p><p className="text-gray-800 whitespace-pre-wrap">{saved.cli_notas}</p></div>}
@@ -503,87 +316,23 @@ export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clie
           </div>
 
           {/* ── Inversores ── */}
+          {/* Editor multi-modelo: si tu proyecto tiene 2 marcas distintas
+              (ej. 8 Sungrow + 2 Huawei) puedes capturarlas por separado.
+              Cada renglón se persiste con su propio botón "Guardar inversores",
+              independiente del botón general de "Guardar información". */}
           <div>
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Inversor</p>
-              {/* Toggle entre catálogo y manual */}
-              <div className="flex gap-1 p-0.5 bg-gray-100 rounded-lg text-xs">
-                <button
-                  type="button"
-                  onClick={() => setInversorMode('catalog')}
-                  className={`px-3 py-1 rounded-md font-medium transition-all ${inversorMode === 'catalog' ? 'bg-white text-[#0F6E56] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                  Buscar en catálogo
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setInversorMode('manual'); setCatalogInversor(null) }}
-                  className={`px-3 py-1 rounded-md font-medium transition-all ${inversorMode === 'manual' ? 'bg-white text-[#0F6E56] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                >
-                  Ingresar manual
-                </button>
-              </div>
-            </div>
-
-            {/* Modo catálogo */}
-            {inversorMode === 'catalog' && (
-              <div className="space-y-3">
-                <InversorSelector
-                  initialId={saved?.cli_inversor_id}
-                  onSelect={setCatalogInversor}
-                />
-                {/* Cantidad de inversores siempre editable */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="label">Cantidad de inversores</label>
-                    <input
-                      className="input-field"
-                      type="number"
-                      min="1"
-                      placeholder="Ej. 1"
-                      value={form.cli_num_inversores}
-                      onChange={set('cli_num_inversores')}
-                    />
-                  </div>
-                  {catalogInversor && (
-                    <div>
-                      <label className="label">Capacidad total (kW)</label>
-                      <input
-                        className="input-field"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder={String(catalogInversor.potencia_kw)}
-                        value={form.cli_capacidad_kw}
-                        onChange={set('cli_capacidad_kw')}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Modo manual */}
-            {inversorMode === 'manual' && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="label">Marca</label>
-                  <input className="input-field" placeholder="Ej. SolarEdge" value={form.cli_marca_inversor} onChange={set('cli_marca_inversor')} />
-                </div>
-                <div>
-                  <label className="label">Modelo</label>
-                  <input className="input-field" placeholder="Ej. SE5000H" value={form.cli_modelo_inversor} onChange={set('cli_modelo_inversor')} />
-                </div>
-                <div>
-                  <label className="label">Capacidad (kW)</label>
-                  <input className="input-field" type="number" min="0" step="0.01" placeholder="Ej. 5.0" value={form.cli_capacidad_kw} onChange={set('cli_capacidad_kw')} />
-                </div>
-                <div>
-                  <label className="label">Cantidad de inversores</label>
-                  <input className="input-field" type="number" min="1" placeholder="Ej. 1" value={form.cli_num_inversores} onChange={set('cli_num_inversores')} />
-                </div>
-              </div>
-            )}
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Inversores
+            </p>
+            <p className="text-xs text-gray-500 mb-3">
+              Si el proyecto tiene varios modelos de inversor mezclados, agrega un renglón para cada uno.
+              El acta y la lista de verificación los redactan automáticamente.
+            </p>
+            <InversoresEditor
+              expedienteId={expedienteId}
+              initial={inversoresExpediente ?? []}
+              modoLibre
+            />
           </div>
 
           {/* Medidor y dirección */}
@@ -623,13 +372,13 @@ export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clie
       <div className="card">
         <h2 className="text-base font-semibold text-gray-800 mb-5">Documentos</h2>
 
-        {/* Aviso cuando el certificado ya está en el catálogo */}
+        {/* Aviso cuando el inversor proviene del catálogo (cert ya registrado) */}
         {catalogHasCert && (
           <div className="flex items-start gap-3 bg-green-50 border border-green-200 rounded-xl px-4 py-3 mb-4 text-sm">
             <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
             <p className="text-green-700">
-              El certificado del <span className="font-semibold">{catalogInversor!.marca} {catalogInversor!.modelo}</span> ya está registrado en nuestro sistema.
-              No es necesario que lo subas.
+              Detectamos que tu inversor está registrado en nuestro catálogo.
+              Si su certificado ya está cargado en el sistema no es necesario que lo subas tú.
             </p>
           </div>
         )}

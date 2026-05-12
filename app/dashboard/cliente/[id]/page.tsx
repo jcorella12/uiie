@@ -247,6 +247,13 @@ export default async function ProyectoDetalleCliente({
     })
   )
 
+  // Lista de inversores del expediente (multi-modelo).
+  const { data: inversoresExpediente } = await supabase
+    .from('expediente_inversores')
+    .select('id, orden, inversor_id, marca, modelo, cantidad, potencia_kw, certificacion, justificacion_ieee1547')
+    .eq('expediente_id', params.id)
+    .order('orden')
+
   const folio    = expediente.folio    as any
   const inversor = expediente.inversor as any
   const inspector= expediente.inspector as any
@@ -507,6 +514,16 @@ export default async function ProyectoDetalleCliente({
         isLocked={['revision', 'aprobado', 'cerrado'].includes(expediente.status)}
         saved={expediente as any}
         clienteDocs={clienteDocsConUrl}
+        inversoresExpediente={(inversoresExpediente ?? []).map((r: any) => ({
+          id: r.id,
+          inversor_id: r.inversor_id,
+          marca: r.marca ?? '',
+          modelo: r.modelo ?? '',
+          cantidad: r.cantidad ?? 1,
+          potencia_kw: r.potencia_kw ?? null,
+          certificacion: r.certificacion ?? 'ul1741',
+          justificacion_ieee1547: r.justificacion_ieee1547 ?? null,
+        }))}
       />
 
       {/* ── Documentos ── */}

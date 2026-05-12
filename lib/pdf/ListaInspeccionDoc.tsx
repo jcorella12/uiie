@@ -1,6 +1,11 @@
 import {
   Document, Page, Text, View, StyleSheet, Image,
 } from '@react-pdf/renderer'
+import {
+  observacionListaInversores,
+  cumplimientoCertificacion,
+  type InversorRow,
+} from '@/lib/docx/inversores-redaccion'
 
 // ─── Interface ────────────────────────────────────────────────────────────────
 
@@ -26,7 +31,8 @@ export interface ListaData {
   numero_medidor: string
   tiene_i1_i2: boolean
   dictamen_folio_dvnp: string
-  // Inversores
+  // Inversores (lista preferente)
+  inversores?: InversorRow[]
   num_inversores: number
   marca_inversor: string
   modelo_inversor: string
@@ -299,16 +305,18 @@ interface Fila {
 
 function buildFilas(d: ListaData): Fila[] {
   const tc = d.tipo_central ?? 'MT'
-  const marca  = d.marca_inversor.toUpperCase()
-  const modelo = d.modelo_inversor.toUpperCase()
-  const n      = d.num_inversores
-  const plural = n > 1
 
-  const certLabel = d.certificacion_inversor === 'ul1741'
-    ? 'UL1741'
-    : d.certificacion_inversor === 'ieee1547'
-    ? 'IEEE 1547'
-    : 'Sin certificación'
+  // Multi-inversor: lista preferente, si no, fallback al campo legacy.
+  const inversores: InversorRow[] = (d.inversores && d.inversores.length > 0)
+    ? d.inversores
+    : [{
+        marca: d.marca_inversor,
+        modelo: d.modelo_inversor,
+        cantidad: d.num_inversores ?? 1,
+        certificacion: d.certificacion_inversor as InversorRow['certificacion'],
+      }]
+  const obsInversores = observacionListaInversores(inversores)
+  const cumpleCert = cumplimientoCertificacion(inversores)
 
   return [
     {
@@ -340,10 +348,8 @@ function buildFilas(d: ListaData): Fila[] {
       inciso: '1.4',
       cuestionamiento: 'Certificaciones de operación en Campo',
       criterio: 'Inversor Cuenta con la certificación UL o cumple con los requerimientos establecidos en las DACGS',
-      cumple: d.certificacion_inversor !== 'ninguna',
-      observacion: d.certificacion_inversor !== 'ninguna'
-        ? `${plural ? `Los ${n} inversores ${marca} ${modelo} cuentan` : `El inversor ${marca} ${modelo} cuenta`} con certificación internacional ${certLabel} por lo cual cumple. ${plural ? 'Los inversores cuentan' : 'El inversor cuenta'} con certificados emitidos por laboratorios extranjeros, los cuales demuestran el cumplimiento con las características para interconexión como los protocolos de seguridad.`
-        : `El inversor ${marca} ${modelo} no cuenta con certificación UL1741 ni IEEE 1547. No Cumple.`,
+      cumple: cumpleCert,
+      observacion: obsInversores,
     },
     {
       inciso: '1.5',
