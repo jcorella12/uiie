@@ -40,6 +40,28 @@ function getLogoPath(): string | undefined {
   return fs.existsSync(p) ? p : undefined
 }
 
+// Tipos de documento que SÍ entran en la sección "Documentos inspeccionados"
+// del informe. Excluye fotografías/evidencias de visita (van aparte en el
+// ZIP), INEs (carpeta 6), actas/listas internas (las genera el inspector),
+// y documentos comerciales (cotización/contrato/recibos de pago).
+//
+// "Otro" se incluye porque el cliente lo usa para fichas técnicas y similares
+// vía el slot "Otros documentos" del portal de precarga.
+const TIPOS_DOCS_INFORME = new Set<string>([
+  'diagrama',
+  'plano',
+  'memoria_calculo',
+  'memoria_tecnica',
+  'dictamen',
+  'dictamen_uvie',
+  'oficio_resolutivo',
+  'resolutivo',
+  'certificado_inversor',
+  'certificado_cre',
+  'acuse_cre',
+  'otro',
+])
+
 // ─── Loader ─────────────────────────────────────────────────────────────────
 
 export async function construirInformeData(
@@ -211,10 +233,16 @@ export async function construirInformeData(
       nombre: t.nombre, apellidos: t.apellidos, numero_ine: t.numero_ine,
     })),
 
-    // Documentos
-    documentos_inspeccionados: (documentos ?? []).map((d: any) => ({
-      nombre: d.nombre, tipo: d.tipo, subido_por_cliente: !!d.subido_por_cliente, created_at: d.created_at,
-    })),
+    // Documentos — solo técnico-regulatorios, sin evidencias visuales.
+    // El origen (cliente vs inspector) se omite porque conceptualmente toda
+    // la evidencia es responsabilidad del cliente.
+    documentos_inspeccionados: (documentos ?? [])
+      .filter((d: any) => TIPOS_DOCS_INFORME.has(d.tipo))
+      .map((d: any) => ({
+        nombre: d.nombre,
+        tipo: d.tipo,
+        created_at: d.created_at,
+      })),
 
     // Resolutivo / dictamen
     resolutivo_folio:    (exp.resolutivo_folio as string | null) ?? undefined,

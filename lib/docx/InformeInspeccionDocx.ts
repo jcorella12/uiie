@@ -40,7 +40,6 @@ import {
 export interface DocumentoInspeccionado {
   nombre:        string
   tipo:          string         // ej. 'oficio_resolutivo', 'dictamen_uvie', etc.
-  subido_por_cliente?: boolean  // true si lo cargó el cliente; false si fue staff
   created_at?:   string
 }
 
@@ -241,35 +240,28 @@ function tipoLabel(tipo: string): string {
 }
 
 function documentosTable(docs: DocumentoInspeccionado[]): Table {
-  // Agrupar duplicados por tipo y mostrar conteo
   const head = new TableRow({
     tableHeader: true,
     children: [
-      headerCell('#',                      540),
-      headerCell('Documento',              4500),
-      headerCell('Tipo',                   2700),
-      headerCell('Origen',                 1620),
+      headerCell('#',         540),
+      headerCell('Documento', 5760),
+      headerCell('Tipo',      3060),
     ],
   })
 
   const dataRows = docs.map((d, i) =>
     new TableRow({
       children: [
-        bodyCell(String(i + 1),            540,  AlignmentType.CENTER),
-        bodyCell(d.nombre,                 4500, AlignmentType.LEFT),
-        bodyCell(tipoLabel(d.tipo),        2700, AlignmentType.LEFT),
-        bodyCell(
-          d.subido_por_cliente ? 'Cliente' : 'Inspector',
-          1620,
-          AlignmentType.CENTER,
-        ),
+        bodyCell(String(i + 1),     540,  AlignmentType.CENTER),
+        bodyCell(d.nombre,          5760, AlignmentType.LEFT),
+        bodyCell(tipoLabel(d.tipo), 3060, AlignmentType.LEFT),
       ],
     }),
   )
 
   return new Table({
     width: { size: CONTENT_WIDTH, type: WidthType.DXA },
-    columnWidths: [540, 4500, 2700, 1620],
+    columnWidths: [540, 5760, 3060],
     rows: [head, ...dataRows],
   })
 }
@@ -459,20 +451,20 @@ export async function generarInformeInspeccionDocx(d: InformeData): Promise<Buff
     : null
 
   // ── 4. PERSONAL PRESENTE EN LA INSPECCIÓN ──────────────────────────────────
+  // Solo el inspector ejecutor + atiende + testigos. El inspector responsable
+  // NO se lista aquí: él revisa el expediente desde la oficina y emite el
+  // certificado (firma al final del informe), no asiste a la visita.
   const personalRows: { label: string; value: string }[] = [
     { label: 'Inspector ejecutor',       value: `${d.inspector_nombre}${d.inspector_cedula ? ` (Cédula: ${d.inspector_cedula})` : ''}` },
+    {
+      label: 'Persona que atiende la visita',
+      value: [
+        d.atiende_nombre,
+        d.atiende_correo ? `<${d.atiende_correo}>` : null,
+        d.atiende_telefono ? `tel. ${d.atiende_telefono}` : null,
+      ].filter(Boolean).join(' '),
+    },
   ]
-  if (d.inspector_responsable_nombre && d.inspector_responsable_nombre !== d.inspector_nombre) {
-    personalRows.push({ label: 'Inspector responsable', value: d.inspector_responsable_nombre })
-  }
-  personalRows.push({
-    label: 'Persona que atiende la visita',
-    value: [
-      d.atiende_nombre,
-      d.atiende_correo ? `<${d.atiende_correo}>` : null,
-      d.atiende_telefono ? `tel. ${d.atiende_telefono}` : null,
-    ].filter(Boolean).join(' '),
-  })
   d.testigos.slice(0, 2).forEach((t, i) => {
     personalRows.push({
       label: `Testigo ${i + 1}`,
@@ -493,9 +485,10 @@ export async function generarInformeInspeccionDocx(d: InformeData): Promise<Buff
     : null
 
   const docsResumen = para([
-    run('Se inspeccionaron un total de '),
+    run('El cliente entregó un total de '),
     run(String(d.documentos_inspeccionados.length), { bold: true }),
-    run(' documentos en el expediente. La revisión incluyó la verificación de la integridad, ' +
+    run(' documentos técnico-regulatorios para integrar el expediente. Toda la evidencia ' +
+        'documental es responsabilidad del cliente; el inspector verificó la integridad, ' +
         'autenticidad y vigencia de cada documento conforme a los requerimientos de las DACG.'),
   ])
 
@@ -607,7 +600,7 @@ export async function generarInformeInspeccionDocx(d: InformeData): Promise<Buff
             new Paragraph({
               alignment: AlignmentType.CENTER,
               children: [new TextRun({
-                text: 'Inspector responsable de la UIIE',
+                text: 'Inspector responsable de la UIIE — revisa y emite el certificado',
                 size: pt(8), font: FONT,
               })],
             }),
@@ -667,10 +660,11 @@ export async function generarInformeInspeccionDocx(d: InformeData): Promise<Buff
     personalTable,
     blankLine(),
     para([
-      run('La inspección se realizó en presencia del personal arriba señalado, quienes acompañaron ' +
-          'al inspector en el recorrido por las instalaciones y atestiguaron el procedimiento ' +
-          'completo. La identificación oficial INE de cada participante fue verificada y se ' +
-          'incluye copia digital en la carpeta "6. IDENTIFICACIONES" del paquete documental.'),
+      run('La visita de inspección fue ejecutada por el inspector arriba indicado, acompañado ' +
+          'por la persona que el cliente designó para atender la verificación' +
+          (d.testigos.length > 0 ? ' y los testigos correspondientes' : '') +
+          '. La identificación oficial INE de cada participante fue verificada y se incluye ' +
+          'copia digital en la carpeta "6. IDENTIFICACIONES" del paquete documental.'),
     ]),
 
     sectionTitle('5. Documentos inspeccionados'),
