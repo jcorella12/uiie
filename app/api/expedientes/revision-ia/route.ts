@@ -11,11 +11,36 @@ export async function POST(req: NextRequest) {
 
   const { data: u } = await supabase
     .from('usuarios').select('rol').eq('id', user.id).single()
-  const esAdmin = ['admin', 'inspector_responsable'].includes(u?.rol ?? '')
-  if (!esAdmin) return NextResponse.json({ error: 'Solo administradores' }, { status: 403 })
+  // El análisis IA está disponible para admin/responsable y para inspector
+  // (estos últimos solo en sus propios expedientes — verificación abajo).
+  // Auxiliares no pueden disparar IA porque tiene costo y ellos no son los
+  // responsables del expediente.
+  const rolesPermitidos = ['admin', 'inspector_responsable', 'inspector']
+  if (!rolesPermitidos.includes(u?.rol ?? '')) {
+    return NextResponse.json({ error: 'Sin permisos para ejecutar análisis IA' }, { status: 403 })
+  }
+  const esStaff = ['admin', 'inspector_responsable'].includes(u?.rol ?? '')
 
   const { expediente_id } = await req.json()
   if (!expediente_id) return NextResponse.json({ error: 'expediente_id requerido' }, { status: 400 })
+
+  // Inspector solo puede analizar sus propios expedientes — comprobación
+  // explícita porque el endpoint usa service client que bypassea RLS.
+  if (!esStaff) {
+    const db = await createServiceClient()
+    const { data: ownerCheck } = await db
+      .from('expedientes')
+      .select('inspector_id, inspector_ejecutor_id')
+      .eq('id', expediente_id)
+      .maybeSingle()
+    if (!ownerCheck) {
+      return NextResponse.json({ error: 'Expediente no encontrado' }, { status: 404 })
+    }
+    const esDueno = ownerCheck.inspector_id === user.id || ownerCheck.inspector_ejecutor_id === user.id
+    if (!esDueno) {
+      return NextResponse.json({ error: 'Solo puedes analizar tus propios expedientes' }, { status: 403 })
+    }
+  }
 
   let anthropic
   try { anthropic = getAnthropicClient() }

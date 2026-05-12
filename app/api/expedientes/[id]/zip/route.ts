@@ -105,10 +105,10 @@ export async function GET(
     .select(`
       id, numero_folio, status, kwp, num_paneles, ciudad, estado_mx,
       direccion_proyecto, colonia, codigo_postal, municipio,
-      nombre_cliente_final, fecha_inicio, fecha_cierre, inspector_id,
+      nombre_cliente_final, fecha_inicio, fecha_cierre, inspector_id, cliente_id,
       resolutivo_folio, resolutivo_fecha, resolutivo_monto, resolutivo_referencia,
       dictamen_folio_dvnp, numero_medidor,
-      cliente:clientes(nombre, firmante_nombre, firmante_correo, ine_url_frente, ine_url_reverso),
+      cliente:clientes(id, nombre, firmante_nombre, firmante_correo, ine_url_frente, ine_url_reverso),
       inspector:usuarios!inspector_id(nombre, apellidos, email),
       inversor:inversores!expedientes_inversor_id_fkey(marca, modelo, potencia_kw),
       certificados_cre(id, numero_certificado, url_cre, url_acuse, fecha_emision, storage_path_cert, storage_path_acuse)
@@ -139,14 +139,48 @@ export async function GET(
     .select('id, nombre, tipo, storage_path, mime_type, created_at')
     .eq('expediente_id', params.id)
 
-  // ── Cargar inspecciones para INEs de testigos ────────────────────────────
-  const { data: inspecciones } = await db
-    .from('inspecciones')
+  // ── Testigos del expediente (modelo nuevo: expediente_testigos 1..N) ──────
+  // El modelo viejo guardaba testigo_id en la tabla `inspecciones`; lo seguimos
+  // consultando como respaldo para expedientes legacy y deduplicamos por nombre.
+  const [{ data: expTestigos }, { data: inspecciones }] = await Promise.all([
+    db
+      .from('expediente_testigos')
+      .select(`
+        orden,
+        testigo:testigos(nombre, apellidos, ine_url_frente, ine_url_reverso)
+      `)
+      .eq('expediente_id', params.id)
+      .order('orden'),
+    db
+      .from('inspecciones')
+      .select(`
+        id, fecha_hora,
+        testigo:testigos!testigo_id(nombre, apellidos, ine_url_frente, ine_url_reverso)
+      `)
+      .eq('expediente_id', params.id),
+  ])
+
+  // ── INEs adicionales del cliente (representante, esposo/a, etc.) ──────────
+  // Tabla cliente_ines: 1..N INEs por cliente. El firmante principal sigue en
+  // clientes.ine_url_frente/reverso (legacy); estas son las extras.
+  const clienteIdReal = (exp as any).cliente_id as string | null
+  const { data: cliente_ines } = clienteIdReal
+    ? await db
+        .from('cliente_ines')
+        .select('etiqueta, nombre_completo, numero_ine, ine_url_frente, ine_url_reverso')
+        .eq('cliente_id', clienteIdReal)
+    : { data: [] as any[] }
+
+  // ── Lista multi-inversor: para descargar certificados del catálogo y
+  //    homologaciones CNE por cada marca distinta. ────────────────────────────
+  const { data: invsExp } = await db
+    .from('expediente_inversores')
     .select(`
-      id, fecha_hora,
-      testigo:testigos!testigo_id(nombre, apellidos, ine_url_frente, ine_url_reverso)
+      marca, modelo, certificacion,
+      inversor:inversores!inversor_id(certificado_url, certificacion, marca, modelo)
     `)
     .eq('expediente_id', params.id)
+    .order('orden')
 
   // ── Construir el ZIP ──────────────────────────────────────────────────────
   // Nombre del ZIP: SIEMPRE usar el número de folio interno (UIIE-NNN-YYYY)
@@ -211,15 +245,60 @@ export async function GET(
     }
   }
 
-  // INEs de testigos
+  // INEs adicionales del cliente (cliente_ines: representante, esposo/a, etc.)
+  for (const ci of cliente_ines ?? []) {
+    const nombre = (ci.nombre_completo ?? ci.etiqueta ?? '').trim()
+    if (!nombre || inesProcesadas.has(nombre)) continue
+    if (!ci.ine_url_frente && !ci.ine_url_reverso) continue
+    inesProcesadas.add(nombre)
+    // Anteponemos la etiqueta al nombre del archivo para que el auditor
+    // vea de un vistazo de quién es la INE: "Representante_Juan_Perez_frente.jpg"
+    const prefijo = ci.etiqueta ? `${safeName(ci.etiqueta)}_` : ''
+    if (ci.ine_url_frente)  await agregarINE(`${prefijo}${nombre}`, 'frente',  ci.ine_url_frente)
+    if (ci.ine_url_reverso) await agregarINE(`${prefijo}${nombre}`, 'reverso', ci.ine_url_reverso)
+  }
+
+  // INEs de testigos — fusionamos las dos fuentes (expediente_testigos modelo
+  // nuevo + inspecciones modelo legacy) y deduplicamos por nombre completo.
+  const testigosTodos: Array<{ nombre?: string; apellidos?: string; ine_url_frente?: string; ine_url_reverso?: string }> = []
+  for (const et of expTestigos ?? []) {
+    const t = (et as any).testigo
+    if (t) testigosTodos.push(t)
+  }
   for (const insp of inspecciones ?? []) {
-    const t = insp.testigo as any
-    if (!t) continue
+    const t = (insp as any).testigo
+    if (t) testigosTodos.push(t)
+  }
+  for (const t of testigosTodos) {
     const nombreCompleto = `${t.nombre ?? ''} ${t.apellidos ?? ''}`.trim()
     if (!nombreCompleto || inesProcesadas.has(nombreCompleto)) continue
     inesProcesadas.add(nombreCompleto)
     if (t.ine_url_frente)  await agregarINE(nombreCompleto, 'frente',  t.ine_url_frente)
     if (t.ine_url_reverso) await agregarINE(nombreCompleto, 'reverso', t.ine_url_reverso)
+  }
+
+  // ── Certificados de inversores del catálogo (4. CERTIFICADO INVERSOR) ─────
+  // Si los inversores que se inspeccionaron están en nuestro catálogo y tienen
+  // certificado UL/IEEE cargado en el sistema, lo bajamos al ZIP. Así el
+  // expediente auditable trae todos los soportes técnicos sin que el cliente
+  // haya tenido que subirlos.
+  const certInvProcesados = new Set<string>()
+  for (const fila of (invsExp ?? []) as any[]) {
+    const inv = fila.inversor as { certificado_url?: string | null; marca?: string; modelo?: string } | null
+    if (!inv?.certificado_url) continue
+    const key = inv.certificado_url
+    if (certInvProcesados.has(key)) continue
+    certInvProcesados.add(key)
+    try {
+      const { data: file } = await db.storage.from('documentos').download(inv.certificado_url)
+      if (!file) continue
+      const buf = await file.arrayBuffer()
+      const ext = inv.certificado_url.split('.').pop()?.toLowerCase() ?? 'pdf'
+      const filename = `Certificado_${safeName(inv.marca ?? '')}_${safeName(inv.modelo ?? '')}.${ext}`
+      root.folder(FOLDER_CERT_INV)!.file(filename, buf)
+    } catch (e: any) {
+      console.warn(`[zip] No se pudo agregar cert inversor ${inv.certificado_url}:`, e?.message)
+    }
   }
 
   // ── Agregar certificado CRE y acuse en carpeta 10. OPE ────────────────────
@@ -261,33 +340,48 @@ export async function GET(
     await agregarOPE(certificado.storage_path_acuse ?? null, certificado.url_acuse ?? null, 'Acuse')
   }
 
-  // ── Homologación de marca de inversor (4. CERTIFICADO INVERSOR) ──────────
-  // Si el inversor del expediente pertenece a una marca con homologación
-  // (p.ej. Huawei: oficio CNE F00.06.UE/225/2026 + carta de clarificación),
-  // los PDFs se agregan automáticamente al ZIP.
-  const inversor = exp.inversor as any
-  if (inversor?.marca) {
+  // ── Homologaciones CNE por marca (4. CERTIFICADO INVERSOR) ───────────────
+  // Iteramos cada marca distinta presente en expediente_inversores. Si un
+  // proyecto tiene 8 Sungrow + 2 Huawei, bajamos los oficios y cartas de
+  // ambas marcas que tengan homologación vigente. Para retro-compat también
+  // consideramos la marca del inversor único legacy (expedientes.inversor_id).
+  const marcasParaHomol = new Set<string>()
+  for (const fila of (invsExp ?? []) as any[]) {
+    if (fila.marca) marcasParaHomol.add(String(fila.marca))
+  }
+  if ((exp.inversor as any)?.marca) marcasParaHomol.add(String((exp.inversor as any).marca))
+
+  const agregarHomol = async (path: string | null, displayName: string | null, fallback: string) => {
+    if (!path) return
+    try {
+      const { data: file } = await db.storage.from('documentos').download(path)
+      if (!file) return
+      const buf = await file.arrayBuffer()
+      const filename = safeName(displayName || fallback)
+      root.folder(FOLDER_CERT_INV)!.file(filename, buf)
+    } catch (e: any) {
+      console.warn(`[zip] No se pudo agregar homologación ${path}:`, e?.message)
+    }
+  }
+
+  const homologDescargadas = new Set<string>()
+  for (const marca of marcasParaHomol) {
     const { data: homol } = await db
       .from('inversor_homologaciones')
       .select('marca, oficio_cne_path, oficio_cne_nombre, oficio_cne_numero, carta_marca_path, carta_marca_nombre, vigente')
-      .ilike('marca', inversor.marca)
+      .ilike('marca', marca)
       .eq('vigente', true)
       .maybeSingle()
-
-    if (homol) {
-      const agregarHomol = async (path: string | null, displayName: string | null, fallback: string) => {
-        if (!path) return
-        try {
-          const { data: file } = await db.storage.from('documentos').download(path)
-          if (!file) return
-          const buf = await file.arrayBuffer()
-          const filename = safeName(displayName || fallback)
-          root.folder(FOLDER_CERT_INV)!.file(filename, buf)
-        } catch (e: any) {
-          console.warn(`[zip] No se pudo agregar homologación ${path}:`, e?.message)
-        }
-      }
-      await agregarHomol(homol.oficio_cne_path,  homol.oficio_cne_nombre,  `Oficio CNE ${homol.oficio_cne_numero}.pdf`)
+    if (!homol) continue
+    // Dedup por oficio (la misma marca puede aparecer 2 veces si hay legacy
+    // y multi); el oficio CNE típicamente es el mismo para todas las marcas
+    // con homologación, así que solo lo metemos una vez.
+    if (homol.oficio_cne_path && !homologDescargadas.has(homol.oficio_cne_path)) {
+      homologDescargadas.add(homol.oficio_cne_path)
+      await agregarHomol(homol.oficio_cne_path, homol.oficio_cne_nombre, `Oficio CNE ${homol.oficio_cne_numero}.pdf`)
+    }
+    if (homol.carta_marca_path && !homologDescargadas.has(homol.carta_marca_path)) {
+      homologDescargadas.add(homol.carta_marca_path)
       await agregarHomol(homol.carta_marca_path, homol.carta_marca_nombre, `Clarificacion ${homol.marca}.pdf`)
     }
   }
@@ -309,6 +403,15 @@ export async function GET(
 
   // ── Resumen.txt con metadata del expediente ───────────────────────────────
   const inspector = exp.inspector as any
+  const inversor  = exp.inversor as any
+  // Lista de inversores multi para el resumen
+  const inversoresResumen = ((invsExp ?? []) as any[])
+    .map((f) => `  - ${f.marca ?? '—'} ${f.modelo ?? ''} (cert: ${f.certificacion ?? '—'})`)
+    .join('\n') || '  (sin lista multi-inversor — usando catálogo legacy)'
+
+  // INEs descargadas (audit trail)
+  const inesDetalle = Array.from(inesProcesadas).map((n) => `  - ${n}`).join('\n') || '  (ninguna)'
+
   const resumen = `RESPALDO DE EXPEDIENTE — ${exp.numero_folio}
 Generado: ${new Date().toLocaleString('es-MX')}
 
@@ -347,7 +450,9 @@ INSTALACIÓN
 
 Potencia:                ${exp.kwp ?? '—'} kWp
 Núm. paneles:            ${exp.num_paneles ?? '—'}
-Inversor:                ${inversor ? `${inversor.marca} ${inversor.modelo} (${inversor.potencia_kw} kW)` : '—'}
+Inversor (catálogo):     ${inversor ? `${inversor.marca} ${inversor.modelo} (${inversor.potencia_kw} kW)` : '—'}
+Inversores del proyecto:
+${inversoresResumen}
 Núm. medidor CFE:        ${exp.numero_medidor ?? '—'}
 
 ═══════════════════════════════════════════════════════════════
@@ -382,11 +487,15 @@ URL bóveda:              ${certificado?.url_cre ?? '—'}
 URL acuse:               ${certificado?.url_acuse ?? '—'}
 
 ═══════════════════════════════════════════════════════════════
-ARCHIVOS INCLUIDOS
+ARCHIVOS INCLUIDOS (auditoría)
 ═══════════════════════════════════════════════════════════════
 
-Total documentos:        ${(documentos ?? []).length}
-INEs de participantes:   ${inesProcesadas.size}
+Documentos del expediente:    ${(documentos ?? []).length}
+INEs de participantes:        ${inesProcesadas.size}
+${inesDetalle}
+
+Certificados de inversor:     ${certInvProcesados.size} (catálogo) + ${homologDescargadas.size} (homologación CNE)
+Marcas con homologación:      ${Array.from(marcasParaHomol).join(', ') || '—'}
 `
   root.file('resumen.txt', resumen)
 

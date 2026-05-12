@@ -475,6 +475,158 @@ export default function RevisionSection({
   const docsRevisadosCount = Object.values(docsRevisados).filter(Boolean).length
   const todosRevisados = documentos.length > 0 && docsRevisadosCount === documentos.length
 
+  /**
+   * Panel de Análisis IA (botón + advertencia de costo + resultado).
+   * Se renderiza tanto en la vista del admin como en la del inspector.
+   * Cuando se llama desde la vista del inspector pasamos `withCostWarning`
+   * para que vea un aviso explícito de que cada corrida cuesta dinero.
+   */
+  const renderIAPanel = (opts: { withCostWarning?: boolean } = {}) => (
+    <div className="space-y-3">
+      {opts.withCostWarning && (
+        <div className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+          <div className="text-xs text-amber-900 leading-relaxed">
+            <p className="font-semibold mb-0.5">Cada análisis con IA tiene un costo.</p>
+            <p>
+              Úsalo solo cuando hayas terminado de subir todos los documentos del expediente
+              y antes de mandarlo a revisión. Mantén el uso al mínimo —
+              repetir el análisis varias veces sobre el mismo paquete duplica el cargo.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Botón */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <button
+          onClick={handleRevisionIA}
+          disabled={loadingIA || documentos.length === 0}
+          className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50 font-medium"
+        >
+          {loadingIA
+            ? <Loader2 className="w-4 h-4 animate-spin" />
+            : <Brain className="w-4 h-4" />}
+          {loadingIA ? 'Analizando…' : 'Revisión IA del paquete'}
+        </button>
+        <span className="text-xs text-gray-400">
+          Claude analiza todos los documentos y detecta inconsistencias
+        </span>
+      </div>
+
+      {/* Resultado IA — soporta el nuevo schema (SKILL UIIE) y el viejo */}
+      {iaResult && (() => {
+        const esFormatoNuevo = Array.isArray(iaResult.hallazgos)
+        const recomendacion = iaResult.recomendacion_final ?? iaResult.resultado
+        const recomendacionLabel =
+          recomendacion === 'aprobar' || recomendacion === 'aprobado' ? 'Listo para aprobar'
+          : recomendacion === 'rechazar' || recomendacion === 'rechazado' ? 'Requiere correcciones'
+          : 'Con observaciones'
+        const recomendacionColor =
+          recomendacion === 'aprobar' || recomendacion === 'aprobado' ? 'text-green-700'
+          : recomendacion === 'rechazar' || recomendacion === 'rechazado' ? 'text-red-700'
+          : 'text-orange-700'
+
+        const hallazgos: any[] = esFormatoNuevo
+          ? iaResult.hallazgos
+          : (iaResult.alertas ?? []).map((a: any) => ({
+              prioridad: a.nivel === 'error' ? 1 : a.nivel === 'advertencia' ? 4 : 8,
+              categoria: a.categoria,
+              nivel: a.nivel === 'error' ? 'critico' : a.nivel === 'advertencia' ? 'atencion' : 'aguas',
+              descripcion: a.descripcion,
+              accion_requerida: a.accion_requerida,
+            }))
+
+        const criticos = hallazgos.filter(h => h.nivel === 'critico').sort((a,b) => a.prioridad - b.prioridad)
+        const atencion = hallazgos.filter(h => h.nivel === 'atencion').sort((a,b) => a.prioridad - b.prioridad)
+        const aguas    = hallazgos.filter(h => h.nivel === 'aguas').sort((a,b) => a.prioridad - b.prioridad)
+
+        return (
+          <div className="rounded-xl border border-purple-200 bg-purple-50 overflow-hidden">
+            <button
+              onClick={() => setIaOpen(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 bg-purple-100/60 hover:bg-purple-100 transition-colors"
+            >
+              <div className="flex items-center gap-2 text-left">
+                <Brain className="w-4 h-4 text-purple-600 shrink-0" />
+                <span className="text-sm font-semibold text-purple-800">
+                  Resultado de Revisión IA —&nbsp;
+                  <span className={recomendacionColor}>{recomendacionLabel}</span>
+                </span>
+                {hallazgos.length > 0 && (
+                  <span className="text-xs text-purple-600">
+                    · {criticos.length > 0 && `${criticos.length} críticos`}
+                    {criticos.length > 0 && atencion.length > 0 && ', '}
+                    {atencion.length > 0 && `${atencion.length} atención`}
+                    {(criticos.length + atencion.length) > 0 && aguas.length > 0 && ', '}
+                    {aguas.length > 0 && `${aguas.length} aguas`}
+                  </span>
+                )}
+              </div>
+              {iaOpen ? <ChevronUp className="w-4 h-4 text-purple-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-purple-500 shrink-0" />}
+            </button>
+
+            {iaOpen && (
+              <div className="p-4 space-y-4">
+                {esFormatoNuevo && (iaResult.folio || iaResult.cliente) && (
+                  <div className="text-xs text-purple-700 font-mono bg-white/70 rounded-lg px-3 py-2 border border-purple-100">
+                    {iaResult.folio && <span>Folio: <strong>{iaResult.folio}</strong></span>}
+                    {iaResult.cliente && <span> · Cliente: <strong>{iaResult.cliente}</strong></span>}
+                    {iaResult.fecha_visita && <span> · Visita: {iaResult.fecha_visita}</span>}
+                  </div>
+                )}
+
+                {iaResult.resumen && <p className="text-sm text-purple-900">{iaResult.resumen}</p>}
+
+                {criticos.length > 0 && (
+                  <HallazgosBlock titulo="🔴 Prioridad alta" color="red" hallazgos={criticos} expedienteId={expedienteId} />
+                )}
+                {atencion.length > 0 && (
+                  <HallazgosBlock titulo="🟡 Requiere atención" color="orange" hallazgos={atencion} expedienteId={expedienteId} />
+                )}
+                {aguas.length > 0 && (
+                  <HallazgosBlock titulo="⚠️ Aguas (alertas menores)" color="gray" hallazgos={aguas} expedienteId={expedienteId} />
+                )}
+
+                {iaResult.documentos_faltantes?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-red-700 uppercase tracking-wider mb-2">
+                      📂 Documentos faltantes
+                    </p>
+                    <ul className="space-y-1">
+                      {iaResult.documentos_faltantes.map((d: string, i: number) => (
+                        <li key={i} className="flex items-center gap-2 text-sm text-red-700">
+                          <FileX className="w-3.5 h-3.5 shrink-0" />
+                          {d}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {iaResult.puntos_ok?.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold text-green-700 uppercase tracking-wider mb-2">
+                      ✅ Sin observaciones
+                    </p>
+                    <ul className="space-y-1">
+                      {iaResult.puntos_ok.map((p: string, i: number) => (
+                        <li key={i} className="flex items-start gap-2 text-sm text-green-800">
+                          <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 text-green-500 shrink-0" />
+                          {p}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })()}
+    </div>
+  )
+
   // ─────────────────────────────────────────────────────────────────────────
   // VISTA INSPECTOR
   // ─────────────────────────────────────────────────────────────────────────
@@ -618,6 +770,9 @@ export default function RevisionSection({
           </p>
         )}
 
+        {/* Análisis IA disponible para el inspector — con advertencia de costo */}
+        {documentos.length > 0 && renderIAPanel({ withCostWarning: true })}
+
         <button
           onClick={handleEnviar}
           disabled={loading || documentos.length === 0}
@@ -749,159 +904,8 @@ export default function RevisionSection({
         )}
       </div>
 
-      {/* Botón revisión IA */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={handleRevisionIA}
-          disabled={loadingIA || documentos.length === 0}
-          className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-purple-600 text-white hover:bg-purple-700 transition-colors disabled:opacity-50 font-medium"
-        >
-          {loadingIA
-            ? <Loader2 className="w-4 h-4 animate-spin" />
-            : <Brain className="w-4 h-4" />}
-          {loadingIA ? 'Analizando…' : 'Revisión IA del paquete'}
-        </button>
-        <span className="text-xs text-gray-400">
-          Claude analiza todos los documentos y detecta inconsistencias
-        </span>
-      </div>
-
-      {/* Resultado IA — soporta el nuevo schema (SKILL UIIE) y el viejo */}
-      {iaResult && (() => {
-        // Normalizamos para detectar formato nuevo vs viejo
-        const esFormatoNuevo = Array.isArray(iaResult.hallazgos)
-        const recomendacion = iaResult.recomendacion_final ?? iaResult.resultado
-        const recomendacionLabel =
-          recomendacion === 'aprobar' || recomendacion === 'aprobado' ? 'Listo para aprobar'
-          : recomendacion === 'rechazar' || recomendacion === 'rechazado' ? 'Requiere correcciones'
-          : 'Con observaciones'
-        const recomendacionColor =
-          recomendacion === 'aprobar' || recomendacion === 'aprobado' ? 'text-green-700'
-          : recomendacion === 'rechazar' || recomendacion === 'rechazado' ? 'text-red-700'
-          : 'text-orange-700'
-
-        // Bucketizar hallazgos por nivel (formato nuevo) o usar alertas (viejo)
-        const hallazgos: any[] = esFormatoNuevo
-          ? iaResult.hallazgos
-          : (iaResult.alertas ?? []).map((a: any) => ({
-              prioridad: a.nivel === 'error' ? 1 : a.nivel === 'advertencia' ? 4 : 8,
-              categoria: a.categoria,
-              nivel: a.nivel === 'error' ? 'critico' : a.nivel === 'advertencia' ? 'atencion' : 'aguas',
-              descripcion: a.descripcion,
-              accion_requerida: a.accion_requerida,
-            }))
-
-        const criticos = hallazgos.filter(h => h.nivel === 'critico').sort((a,b) => a.prioridad - b.prioridad)
-        const atencion = hallazgos.filter(h => h.nivel === 'atencion').sort((a,b) => a.prioridad - b.prioridad)
-        const aguas    = hallazgos.filter(h => h.nivel === 'aguas').sort((a,b) => a.prioridad - b.prioridad)
-
-        return (
-          <div className="rounded-xl border border-purple-200 bg-purple-50 overflow-hidden">
-            <button
-              onClick={() => setIaOpen(v => !v)}
-              className="w-full flex items-center justify-between px-4 py-3 bg-purple-100/60 hover:bg-purple-100 transition-colors"
-            >
-              <div className="flex items-center gap-2 text-left">
-                <Brain className="w-4 h-4 text-purple-600 shrink-0" />
-                <span className="text-sm font-semibold text-purple-800">
-                  Resultado de Revisión IA —&nbsp;
-                  <span className={recomendacionColor}>{recomendacionLabel}</span>
-                </span>
-                {hallazgos.length > 0 && (
-                  <span className="text-xs text-purple-600">
-                    · {criticos.length > 0 && `${criticos.length} críticos`}
-                    {criticos.length > 0 && atencion.length > 0 && ', '}
-                    {atencion.length > 0 && `${atencion.length} atención`}
-                    {(criticos.length + atencion.length) > 0 && aguas.length > 0 && ', '}
-                    {aguas.length > 0 && `${aguas.length} aguas`}
-                  </span>
-                )}
-              </div>
-              {iaOpen ? <ChevronUp className="w-4 h-4 text-purple-500 shrink-0" /> : <ChevronDown className="w-4 h-4 text-purple-500 shrink-0" />}
-            </button>
-
-            {iaOpen && (
-              <div className="p-4 space-y-4">
-                {/* Header datos del expediente (si vienen del nuevo formato) */}
-                {esFormatoNuevo && (iaResult.folio || iaResult.cliente) && (
-                  <div className="text-xs text-purple-700 font-mono bg-white/70 rounded-lg px-3 py-2 border border-purple-100">
-                    {iaResult.folio && <span>Folio: <strong>{iaResult.folio}</strong></span>}
-                    {iaResult.cliente && <span> · Cliente: <strong>{iaResult.cliente}</strong></span>}
-                    {iaResult.fecha_visita && <span> · Visita: {iaResult.fecha_visita}</span>}
-                  </div>
-                )}
-
-                {/* Resumen */}
-                {iaResult.resumen && <p className="text-sm text-purple-900">{iaResult.resumen}</p>}
-
-                {/* 🔴 Críticos (P1, P2, P5) */}
-                {criticos.length > 0 && (
-                  <HallazgosBlock
-                    titulo="🔴 Prioridad alta"
-                    color="red"
-                    hallazgos={criticos}
-                    expedienteId={expedienteId}
-                  />
-                )}
-
-                {/* 🟡 Atención (P3, P4, P6, P7) */}
-                {atencion.length > 0 && (
-                  <HallazgosBlock
-                    titulo="🟡 Requiere atención"
-                    color="orange"
-                    hallazgos={atencion}
-                    expedienteId={expedienteId}
-                  />
-                )}
-
-                {/* ⚠️ Aguas (P8) */}
-                {aguas.length > 0 && (
-                  <HallazgosBlock
-                    titulo="⚠️ Aguas (alertas menores)"
-                    color="gray"
-                    hallazgos={aguas}
-                    expedienteId={expedienteId}
-                  />
-                )}
-
-                {/* Documentos */}
-                {iaResult.documentos_faltantes?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-red-700 uppercase tracking-wider mb-2">
-                      📂 Documentos faltantes
-                    </p>
-                    <ul className="space-y-1">
-                      {iaResult.documentos_faltantes.map((d: string, i: number) => (
-                        <li key={i} className="flex items-center gap-2 text-sm text-red-700">
-                          <FileX className="w-3.5 h-3.5 shrink-0" />
-                          {d}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {/* Puntos OK */}
-                {iaResult.puntos_ok?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold text-green-700 uppercase tracking-wider mb-2">
-                      ✅ Sin observaciones
-                    </p>
-                    <ul className="space-y-1">
-                      {iaResult.puntos_ok.map((p: string, i: number) => (
-                        <li key={i} className="flex items-start gap-2 text-sm text-green-800">
-                          <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 text-green-500 shrink-0" />
-                          {p}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )
-      })()}
+      {/* Botón + resultado de Análisis IA (admin: sin advertencia de costo) */}
+      {renderIAPanel()}
 
       {/* Panel de decisión */}
       {!yaDecidido && status === 'revision' && (
