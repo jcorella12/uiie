@@ -12,6 +12,7 @@ import RevisionSection from '@/components/expedientes/RevisionSection'
 import EnviarRevisionCTA from '@/components/expedientes/EnviarRevisionCTA'
 import EditarFolioBtn from '@/components/expedientes/EditarFolioBtn'
 import EliminarExpedienteBtn from '@/components/expedientes/EliminarExpedienteBtn'
+import ContactarClienteBtn from '@/components/expedientes/ContactarClienteBtn'
 import EliminarInspeccionBtn from '@/components/agenda/EliminarInspeccionBtn'
 import DescargarRespaldoZip from '@/components/expedientes/DescargarRespaldoZip'
 import CollapsibleCard from '@/components/ui/CollapsibleCard'
@@ -296,8 +297,17 @@ export default async function ExpedienteDetailPage({
           <ExpedienteProgressBar status={expediente.status} />
         </div>
 
-        {esAdmin && (
-          <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-end">
+        {/* Acciones del expediente — Contactar cliente disponible para
+            cualquiera con acceso (inspector dueño o staff). Eliminar solo
+            admin/responsable. */}
+        <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-end gap-2 flex-wrap">
+          <ContactarClienteBtn
+            expedienteId={expediente.id}
+            numeroFolio={folioNumero}
+            clienteNombre={cliente?.nombre ?? expediente.nombre_cliente_final ?? '—'}
+            clienteEmail={cliente?.email ?? cliente?.atiende_correo ?? cliente?.firmante_correo ?? null}
+          />
+          {esAdmin && (
             <EliminarExpedienteBtn
               expedienteId={expediente.id}
               numeroFolio={folioNumero}
@@ -305,8 +315,8 @@ export default async function ExpedienteDetailPage({
               status={expediente.status}
               numDocumentos={(documentosConUrl ?? []).length}
             />
-          </div>
-        )}
+          )}
+        </div>
 
         {/* Anchor nav tabs — scroll horizontal en móvil con snap; flex-wrap en desktop */}
         <div className="mt-4 pt-3 border-t border-gray-100 flex items-center gap-2">

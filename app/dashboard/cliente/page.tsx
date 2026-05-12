@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
-import { Zap, MapPin, Calendar, ChevronRight, FolderOpen, CheckCircle2, Clock, Eye, Download, Award } from 'lucide-react'
+import { Zap, MapPin, Calendar, ChevronRight, FolderOpen, CheckCircle2, Clock, Eye, Download, Award, MessageSquare } from 'lucide-react'
 import NotificarBtn from '@/components/cliente/NotificarBtn'
 
 const ROLES_STAFF = ['inspector', 'inspector_responsable', 'admin', 'auxiliar']
@@ -146,6 +146,22 @@ export default async function ClientePortal({
 
   const solicitudes = solicitudesPendientes ?? []
 
+  // ── Mensajes pendientes del inspector → cliente (no leídos) ──
+  // Se muestran como banner destacado arriba del listado de proyectos.
+  const { data: mensajesPendientes } = clienteRecord
+    ? await db
+        .from('expediente_mensajes_cliente')
+        .select(`
+          id, asunto, mensaje, created_at, expediente_id,
+          enviado_por_rol,
+          enviado_por_user:usuarios!enviado_por(nombre, apellidos),
+          expediente:expedientes(numero_folio)
+        `)
+        .eq('cliente_id', clienteRecord.id)
+        .is('leido_at', null)
+        .order('created_at', { ascending: false })
+        .limit(10)
+    : { data: [] }
 
   return (
     <div className="p-6 sm:p-8 max-w-3xl mx-auto">
@@ -166,6 +182,45 @@ export default async function ClientePortal({
           >
             ← Volver al perfil
           </Link>
+        </div>
+      )}
+
+      {/* ── Mensajes pendientes del inspector — banner destacado ── */}
+      {(mensajesPendientes ?? []).length > 0 && (
+        <div className="mb-6 rounded-2xl border-2 border-orange-300 bg-gradient-to-r from-orange-50 to-amber-50 overflow-hidden shadow-sm">
+          <div className="px-5 py-3 bg-orange-100 border-b border-orange-200 flex items-center gap-2">
+            <MessageSquare className="w-4 h-4 text-orange-700" />
+            <p className="text-sm font-bold text-orange-900">
+              Tienes {(mensajesPendientes ?? []).length} mensaje{(mensajesPendientes ?? []).length !== 1 ? 's' : ''} pendiente{(mensajesPendientes ?? []).length !== 1 ? 's' : ''} de tu equipo de inspección
+            </p>
+          </div>
+          <div className="divide-y divide-orange-100">
+            {(mensajesPendientes ?? []).map((m: any) => {
+              const remitente = m.enviado_por_user
+                ? `${m.enviado_por_user.nombre ?? ''} ${m.enviado_por_user.apellidos ?? ''}`.trim()
+                : 'UIIE'
+              const folio = m.expediente?.numero_folio ?? '—'
+              const fecha = new Date(m.created_at).toLocaleDateString('es-MX', {
+                day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+              })
+              return (
+                <div key={m.id} className="px-5 py-3 space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-xs font-semibold text-brand-green">{folio}</span>
+                    <span className="text-[10px] text-orange-700 font-semibold uppercase tracking-wide bg-orange-200 rounded-full px-2 py-0.5">
+                      Sin leer
+                    </span>
+                    <span className="text-[11px] text-gray-500 ml-auto">{fecha}</span>
+                  </div>
+                  {m.asunto && (
+                    <p className="text-sm font-semibold text-gray-900">{m.asunto}</p>
+                  )}
+                  <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{m.mensaje}</p>
+                  <p className="text-[11px] text-gray-500 italic">— {remitente}</p>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
 
