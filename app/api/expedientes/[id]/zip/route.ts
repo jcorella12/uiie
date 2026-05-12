@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import JSZip from 'jszip'
+import { construirInformeData } from '@/lib/informe-inspeccion-loader'
+import { generarInformeInspeccionDocx } from '@/lib/docx/InformeInspeccionDocx'
 
 /**
  * GET /api/expedientes/[id]/zip
@@ -21,7 +23,7 @@ import JSZip from 'jszip'
  *     6. IDENTIFICACIONES/                  ← INE del firmante + testigos (BD)
  *     7. DOCUMENTOS/                        ← acta, lista, contrato, etc.
  *     8. COTIZACIÓN FACTURA/
- *     9. INFORME DE INSPECCIÓN/             ← documento aparte (aún no generado)
+ *     9. INFORME DE INSPECCIÓN/             ← Informe-Inspeccion-{folio}.docx (auto)
  *    10. OPE/                                ← Certificado + Acuse (BD)
  *     resumen.txt
  */
@@ -65,8 +67,8 @@ const FOLDER_BY_TIPO: Record<string, string> = {
   otro:                 FOLDER_DOCS,
   // 8. Cotización / factura
   ficha_pago:           FOLDER_COTIZACION,
-  // 9. Informe de inspección — documento que aún no se genera (carpeta vacía
-  //    por ahora; cuando exista un documento_tipo específico se agrega aquí)
+  // 9. Informe de inspección — se genera automáticamente con
+  //    generarInformeInspeccionDocx() más abajo y se inserta en el ZIP.
   // 10. OPE (certificado CRE + acuse)
   certificado_cre:      FOLDER_OPE,
   acuse_cre:            FOLDER_OPE,
@@ -288,6 +290,21 @@ export async function GET(
       await agregarHomol(homol.oficio_cne_path,  homol.oficio_cne_nombre,  `Oficio CNE ${homol.oficio_cne_numero}.pdf`)
       await agregarHomol(homol.carta_marca_path, homol.carta_marca_nombre, `Clarificacion ${homol.marca}.pdf`)
     }
+  }
+
+  // ── Generar e incluir el Informe de Inspección (carpeta 9) ────────────────
+  // Documento narrativo exigido por las DACG. Se arma desde los mismos datos
+  // ya cargados (cliente, inspector, inversores multi, documentos, testigos)
+  // y queda como un .docx que el inspector puede revisar/firmar.
+  try {
+    const informeData = await construirInformeData(db, params.id)
+    if (informeData) {
+      const informeBuf = await generarInformeInspeccionDocx(informeData)
+      const informeName = `Informe-Inspeccion-${safeName(informeData.folio)}.docx`
+      root.folder(FOLDER_INFORME)!.file(informeName, informeBuf)
+    }
+  } catch (e: any) {
+    console.warn('[zip] No se pudo generar el Informe de Inspección:', e?.message)
   }
 
   // ── Resumen.txt con metadata del expediente ───────────────────────────────
