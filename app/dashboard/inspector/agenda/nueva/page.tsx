@@ -35,13 +35,13 @@ export default async function NuevaInspeccionPage({
       // Inspector responsable puede programar para cualquier expediente activo
       ? supabase
           .from('expedientes')
-          .select('id, numero_folio, kwp, cliente:clientes(nombre), inspector:usuarios!inspector_id(nombre)')
+          .select('id, numero_folio, kwp, estado_mx, cliente:clientes(nombre), inspector:usuarios!inspector_id(nombre)')
           .not('status', 'eq', 'cerrado')
           .order('created_at', { ascending: false })
       // Inspector normal: solo sus propios expedientes
       : supabase
           .from('expedientes')
-          .select('id, numero_folio, kwp, cliente:clientes(nombre)')
+          .select('id, numero_folio, kwp, estado_mx, cliente:clientes(nombre)')
           .eq('inspector_id', user.id)
           .not('status', 'eq', 'cerrado')
           .order('created_at', { ascending: false }),

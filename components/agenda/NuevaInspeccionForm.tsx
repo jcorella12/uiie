@@ -4,12 +4,15 @@ import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AlertTriangle, CheckCircle, Loader2, ArrowLeft, ChevronLeft, ChevronRight, UserCheck, X } from 'lucide-react'
 import Link from 'next/link'
-import { tzForEstadoMx } from '@/lib/utils'
+import { tzForEstadoMx, offsetForDateInTz } from '@/lib/utils'
 
 interface Expediente {
   id: string
   numero_folio: string
   kwp: number
+  // Estado del expediente — necesario para construir el datetime con la
+  // TZ correcta (Sonora UTC-7, BC UTC-8, etc.). Si no viene, usa CDMX.
+  estado_mx?: string | null
   cliente?: { nombre: string } | null
 }
 
@@ -314,9 +317,17 @@ export default function NuevaInspeccionForm({
     setLoading(true)
     setError(null)
 
-    // CRÍTICO: agregar offset de México (UTC-6, sin DST). Sin esto, Postgres
-    // TIMESTAMPTZ asume UTC y la cita queda con 6 horas de adelanto.
-    const fechaHora = `${selectedDate}T${selectedTime}:00-06:00`
+    // CRÍTICO: el offset depende de la TZ del estado del expediente.
+    // Antes hardcodeaba -06:00 (CDMX), lo que dejaba inspecciones en
+    // Sonora/BC/etc. desfasadas 1-2 horas. Ahora derivamos el offset
+    // correcto vía la TZ IANA del estado (Intl maneja DST si aplica).
+    const expSeleccionado = expedientes.find(e => e.id === expedienteId)
+    const tzExp = tzForEstadoMx(expSeleccionado?.estado_mx ?? null)
+    // Tomamos una Date tentativa solo para que offsetForDateInTz sepa
+    // si en esa fecha aplica DST o no (relevante para Tijuana).
+    const fechaTentativa = new Date(`${selectedDate}T${selectedTime}:00Z`)
+    const offset = offsetForDateInTz(fechaTentativa, tzExp)
+    const fechaHora = `${selectedDate}T${selectedTime}:00${offset}`
 
     async function intentarCrear(force: boolean) {
       const res = await fetch('/api/inspecciones/nueva', {

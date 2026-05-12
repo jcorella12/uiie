@@ -73,6 +73,30 @@ export function tzForEstadoMx(estado: string | null | undefined): string {
   return TZ_MX
 }
 
+/**
+ * Offset UTC actual de una IANA timezone para una fecha dada, formato
+ * "+HH:MM" o "-HH:MM". Maneja DST automáticamente vía Intl.
+ *
+ * Útil para construir un ISO datetime con offset correcto desde un
+ * input "wall clock" (ej. el usuario captura "15:00" en Sonora y
+ * queremos guardarlo en BD como "15:00-07:00" → 22:00 UTC).
+ */
+export function offsetForDateInTz(date: Date, tz: string): string {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone:     tz,
+    timeZoneName: 'longOffset',
+  })
+  const parts = dtf.formatToParts(date)
+  const tzPart = parts.find(p => p.type === 'timeZoneName')?.value ?? 'GMT-06:00'
+  // tzPart ejemplo: "GMT-07:00", "GMT-08:00", "GMT-05:00"
+  const m = tzPart.match(/GMT([+-])(\d{1,2}):?(\d{2})?/)
+  if (!m) return '-06:00'
+  const sign = m[1]
+  const hh   = m[2].padStart(2, '0')
+  const mm   = (m[3] ?? '00').padStart(2, '0')
+  return `${sign}${hh}:${mm}`
+}
+
 export function formatDate(dateStr: string): string {
   return new Date(dateStr).toLocaleDateString('es-MX', {
     year: 'numeric',
