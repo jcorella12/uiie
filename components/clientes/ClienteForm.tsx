@@ -142,8 +142,11 @@ export default function ClienteForm({ modo, cliente, inspectores }: ClienteFormP
   const [inspectorId, setInspectorId] = useState<string>(cliente?.inspector_id ?? '')
 
   // ── Form state ──
+  // Default 'moral' para clientes nuevos (los EPCs y la mayoría de
+  // clientes finales son empresas). Los persona física se cambian
+  // explícitamente desde el toggle.
   const [tipoPersona, setTipoPersona] = useState<TipoPersona>(
-    cliente?.tipo_persona ?? 'fisica'
+    cliente?.tipo_persona ?? 'moral'
   )
   const [figuraJuridica, setFiguraJuridica] = useState<FiguraJuridica>(
     cliente?.figura_juridica ?? ''
@@ -330,6 +333,42 @@ export default function ClienteForm({ modo, cliente, inspectores }: ClienteFormP
       {esEpc ? (
         <>
           <SectionTitle>Datos generales</SectionTitle>
+
+          {/* Tipo persona — visible también en modo EPC. Antes este
+              radio solo aparecía en el form de Cliente Final, lo que
+              causaba que TODOS los EPCs se guardaran como Física aunque
+              fueran S.A. de C.V. */}
+          <div className="mb-4">
+            <label className="label">Tipo de persona <span className="text-red-500">*</span></label>
+            <div className="grid grid-cols-2 gap-3">
+              {(['moral', 'fisica'] as TipoPersona[]).map((tipo) => (
+                <label
+                  key={tipo}
+                  className={`flex items-center gap-3 border-2 rounded-xl px-3 py-2.5 cursor-pointer transition-all select-none ${
+                    tipoPersona === tipo
+                      ? 'border-brand-green bg-brand-green-light text-brand-green'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="tipo_persona_epc"
+                    value={tipo}
+                    checked={tipoPersona === tipo}
+                    onChange={() => setTipoPersona(tipo)}
+                    className="sr-only"
+                  />
+                  {tipo === 'fisica'
+                    ? <User className={`w-4 h-4 shrink-0 ${tipoPersona === tipo ? 'text-brand-green' : 'text-gray-400'}`} />
+                    : <Building2 className={`w-4 h-4 shrink-0 ${tipoPersona === tipo ? 'text-brand-green' : 'text-gray-400'}`} />}
+                  <p className="font-semibold text-sm">
+                    {tipo === 'fisica' ? 'Persona Física' : 'Persona Moral'}
+                  </p>
+                </label>
+              ))}
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Field label="Razón social / Nombre" required>
               <input

@@ -58,6 +58,21 @@ export async function POST(req: NextRequest) {
       .eq('cliente_epc_id', dupId)
     if (e3) { errores.push(`solicitudes epc: ${e3.message}`); continue }
 
+    // 3a. Reasignar mensajes al cliente (tabla nueva — sin ON DELETE)
+    const { error: e3a } = await admin
+      .from('expediente_mensajes_cliente')
+      .update({ cliente_id: keepId })
+      .eq('cliente_id', dupId)
+    if (e3a) { errores.push(`mensajes: ${e3a.message}`); continue }
+
+    // 3b. Reasignar INEs del cliente (tienen ON DELETE CASCADE — re-asignamos
+    //     para que NO se borren cuando eliminemos al duplicado).
+    const { error: e3b } = await admin
+      .from('cliente_ines')
+      .update({ cliente_id: keepId })
+      .eq('cliente_id', dupId)
+    if (e3b) { errores.push(`cliente_ines: ${e3b.message}`); continue }
+
     // 4. Verificar que no queden otras FKs apuntando a dupId
     //    buscando en todas las tablas conocidas
     const { data: expCheck } = await admin

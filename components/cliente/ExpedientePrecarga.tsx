@@ -50,7 +50,7 @@ interface Props {
 
 // ─── Document slots ───────────────────────────────────────────────────────────
 
-const DOCUMENT_SLOTS_BASE: { tipo: string; label: string; multiple?: boolean; optional?: boolean; hiddenWhenCatalogCert?: boolean }[] = [
+const DOCUMENT_SLOTS_BASE: { tipo: string; label: string; multiple?: boolean; optional?: boolean; hiddenWhenCatalogCert?: boolean; requiresDescription?: boolean }[] = [
   { tipo: 'diagrama',             label: 'Diagrama unifilar' },
   { tipo: 'certificado_inversor', label: 'Certificado del inversor(es)', multiple: true, hiddenWhenCatalogCert: true },
   { tipo: 'dictamen_uvie',        label: 'Dictamen de la UVIE' },
@@ -58,6 +58,7 @@ const DOCUMENT_SLOTS_BASE: { tipo: string; label: string; multiple?: boolean; op
   { tipo: 'recibo_cfe',           label: 'Recibo de CFE' },
   { tipo: 'ine_participante',     label: 'INEs de testigos y participantes', multiple: true },
   { tipo: 'memoria_calculo',      label: 'Memoria de cálculo', optional: true },
+  { tipo: 'otro',                 label: 'Otros documentos', multiple: true, optional: true, requiresDescription: true },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -291,10 +292,11 @@ export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clie
   const [saveError,   setSaveError]   = useState<string | null>(null)
 
   // ── Docs state ──────────────────────────────────────────────────────────────
-  const [docs,        setDocs]        = useState<ClienteDoc[]>(clienteDocs ?? [])
-  const [uploading,   setUploading]   = useState<Record<string, boolean>>({})
-  const [uploadError, setUploadError] = useState<Record<string, string | null>>({})
-  const [deleting,    setDeleting]    = useState<Record<string, boolean>>({})
+  const [docs,         setDocs]         = useState<ClienteDoc[]>(clienteDocs ?? [])
+  const [uploading,    setUploading]    = useState<Record<string, boolean>>({})
+  const [uploadError,  setUploadError]  = useState<Record<string, string | null>>({})
+  const [deleting,     setDeleting]     = useState<Record<string, boolean>>({})
+  const [descriptions, setDescriptions] = useState<Record<string, string>>({})
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const set = (key: keyof typeof form) => (
@@ -354,23 +356,41 @@ export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clie
   }
 
   // ── Upload file ──────────────────────────────────────────────────────────────
-  async function handleFileChange(tipo: string, files: FileList | null) {
+  async function handleFileChange(tipo: string, files: FileList | null, requiresDescription = false) {
     if (!files || files.length === 0) return
+
+    // Si el slot requiere descripción, validar que esté capturada
+    const desc = (descriptions[tipo] ?? '').trim()
+    if (requiresDescription && desc.length < 3) {
+      setUploadError(prev => ({ ...prev, [tipo]: 'Escribe primero una descripción del documento (mín. 3 caracteres).' }))
+      if (fileInputRefs.current[tipo]) fileInputRefs.current[tipo]!.value = ''
+      return
+    }
+
     setUploadError(prev => ({ ...prev, [tipo]: null }))
     for (const file of Array.from(files)) {
       setUploading(prev => ({ ...prev, [tipo]: true }))
       try {
+        // Para "Otros" anteponemos la descripción al nombre del archivo
+        // para que el inspector identifique el documento (ej: "Carta poder — escritura.pdf").
+        const nombre = requiresDescription
+          ? `${desc} — ${file.name}`
+          : file.name
         const fd = new FormData()
         fd.append('file', file)
         fd.append('expediente_id', expedienteId)
         fd.append('tipo', tipo)
-        fd.append('nombre', file.name)
+        fd.append('nombre', nombre)
         const res  = await fetch('/api/cliente/documentos/upload', { method: 'POST', body: fd })
         const data = await res.json()
         if (!res.ok) {
           setUploadError(prev => ({ ...prev, [tipo]: data.error ?? 'Error al subir el archivo' }))
         } else {
           setDocs(prev => [...prev, data.doc])
+          // Limpiar descripción tras éxito
+          if (requiresDescription) {
+            setDescriptions(prev => ({ ...prev, [tipo]: '' }))
+          }
         }
       } catch {
         setUploadError(prev => ({ ...prev, [tipo]: 'Error de conexión. Intenta de nuevo.' }))
@@ -619,12 +639,22 @@ export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clie
             const slotDocs    = docs.filter(d => d.tipo === slot.tipo)
             const isUploading = uploading[slot.tipo]
             const slotError   = uploadError[slot.tipo]
+            const needsDesc   = !!slot.requiresDescription
+            const descValue   = descriptions[slot.tipo] ?? ''
+            const descReady   = !needsDesc || descValue.trim().length >= 3
             return (
               <div key={slot.tipo}>
                 <p className="label mb-2">
                   {slot.label}
                   {slot.optional && <span className="text-gray-400 font-normal ml-1">(opcional)</span>}
                 </p>
+                {needsDesc && (
+                  <p className="text-xs text-gray-500 mb-2">
+                    Sube cualquier documento adicional que el inspector deba revisar
+                    (ej. carta poder, escrituras, contrato de interconexión, etc.).
+                    Captura primero una descripción y luego selecciona el archivo.
+                  </p>
+                )}
                 {slotDocs.length > 0 && (
                   <div className="space-y-1.5 mb-2">
                     {slotDocs.map(doc => (
@@ -650,14 +680,43 @@ export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clie
                     ))}
                   </div>
                 )}
+                {needsDesc && (
+                  <div className="mb-2">
+                    <input
+                      type="text"
+                      value={descValue}
+                      onChange={e => setDescriptions(prev => ({ ...prev, [slot.tipo]: e.target.value }))}
+                      placeholder="Describe el documento (ej. Carta poder del representante legal)"
+                      maxLength={120}
+                      className="input-field text-sm"
+                      disabled={isUploading}
+                    />
+                  </div>
+                )}
                 <div
-                  className="relative flex flex-col items-center justify-center gap-1 border-2 border-dashed border-gray-200 rounded-xl px-4 py-4 cursor-pointer hover:border-brand-green hover:bg-green-50/40 transition-colors"
-                  onClick={() => fileInputRefs.current[slot.tipo]?.click()}
+                  className={`relative flex flex-col items-center justify-center gap-1 border-2 border-dashed rounded-xl px-4 py-4 transition-colors ${
+                    descReady
+                      ? 'border-gray-200 cursor-pointer hover:border-brand-green hover:bg-green-50/40'
+                      : 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
+                  }`}
+                  onClick={() => {
+                    if (!descReady) {
+                      setUploadError(prev => ({ ...prev, [slot.tipo]: 'Escribe primero una descripción del documento (mín. 3 caracteres).' }))
+                      return
+                    }
+                    fileInputRefs.current[slot.tipo]?.click()
+                  }}
                   onDragOver={e => e.preventDefault()}
-                  onDrop={e => { e.preventDefault(); handleFileChange(slot.tipo, e.dataTransfer.files) }}
+                  onDrop={e => { e.preventDefault(); handleFileChange(slot.tipo, e.dataTransfer.files, needsDesc) }}
                 >
                   {isUploading ? <Loader2 className="w-5 h-5 text-brand-green animate-spin" /> : <Upload className="w-5 h-5 text-gray-400" />}
-                  <p className="text-xs text-gray-500">{isUploading ? 'Subiendo archivo...' : 'Haz clic o arrastra un archivo aquí'}</p>
+                  <p className="text-xs text-gray-500">
+                    {isUploading
+                      ? 'Subiendo archivo...'
+                      : !descReady
+                        ? 'Captura primero la descripción'
+                        : 'Haz clic o arrastra un archivo aquí'}
+                  </p>
                   <p className="text-xs text-gray-400">PDF o imagen</p>
                   <input
                     ref={el => { fileInputRefs.current[slot.tipo] = el }}
@@ -665,8 +724,8 @@ export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clie
                     accept="image/*,application/pdf"
                     multiple={slot.multiple}
                     className="hidden"
-                    disabled={isUploading}
-                    onChange={e => handleFileChange(slot.tipo, e.target.files)}
+                    disabled={isUploading || !descReady}
+                    onChange={e => handleFileChange(slot.tipo, e.target.files, needsDesc)}
                   />
                 </div>
                 {slotError && (
