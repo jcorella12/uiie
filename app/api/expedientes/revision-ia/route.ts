@@ -11,11 +11,11 @@ export async function POST(req: NextRequest) {
 
   const { data: u } = await supabase
     .from('usuarios').select('rol').eq('id', user.id).single()
-  // El análisis IA está disponible para admin/responsable y para inspector
-  // (estos últimos solo en sus propios expedientes — verificación abajo).
-  // Auxiliares no pueden disparar IA porque tiene costo y ellos no son los
-  // responsables del expediente.
-  const rolesPermitidos = ['admin', 'inspector_responsable', 'inspector']
+  // El análisis IA está disponible para todo el staff (admin / responsable /
+  // inspector / auxiliar). Auxiliares lo usan porque a menudo arman el
+  // paquete a nombre del inspector. Cada corrida queda registrada en la
+  // tabla `ai_costos` con usuario_id, costo USD y expediente_id.
+  const rolesPermitidos = ['admin', 'inspector_responsable', 'inspector', 'auxiliar']
   if (!rolesPermitidos.includes(u?.rol ?? '')) {
     return NextResponse.json({ error: 'Sin permisos para ejecutar análisis IA' }, { status: 403 })
   }
@@ -24,9 +24,10 @@ export async function POST(req: NextRequest) {
   const { expediente_id } = await req.json()
   if (!expediente_id) return NextResponse.json({ error: 'expediente_id requerido' }, { status: 400 })
 
-  // Inspector solo puede analizar sus propios expedientes — comprobación
-  // explícita porque el endpoint usa service client que bypassea RLS.
-  if (!esStaff) {
+  // Inspector — solo sus propios expedientes (dueño o ejecutor delegado).
+  // Auxiliar — puede analizar cualquiera porque típicamente apoya a varios
+  // inspectores; el ai_costos log identifica quién disparó la corrida.
+  if (u?.rol === 'inspector') {
     const db = await createServiceClient()
     const { data: ownerCheck } = await db
       .from('expedientes')

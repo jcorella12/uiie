@@ -140,7 +140,7 @@ export async function GET(
     .eq('expediente_id', params.id)
 
   // ── Testigos del expediente (modelo nuevo: expediente_testigos 1..N) ──────
-  // El modelo viejo guardaba testigo_id en la tabla `inspecciones`; lo seguimos
+  // El modelo viejo guardaba testigo_id en `inspecciones_agenda`; lo seguimos
   // consultando como respaldo para expedientes legacy y deduplicamos por nombre.
   const [{ data: expTestigos }, { data: inspecciones }] = await Promise.all([
     db
@@ -152,7 +152,7 @@ export async function GET(
       .eq('expediente_id', params.id)
       .order('orden'),
     db
-      .from('inspecciones')
+      .from('inspecciones_agenda')
       .select(`
         id, fecha_hora,
         testigo:testigos!testigo_id(nombre, apellidos, ine_url_frente, ine_url_reverso)
@@ -496,6 +496,23 @@ ${inesDetalle}
 
 Certificados de inversor:     ${certInvProcesados.size} (catálogo) + ${homologDescargadas.size} (homologación CNE)
 Marcas con homologación:      ${Array.from(marcasParaHomol).join(', ') || '—'}
+
+═══════════════════════════════════════════════════════════════
+DIAGNÓSTICO (qué se buscó vs qué se encontró)
+═══════════════════════════════════════════════════════════════
+
+Si una INE o certificado no aparece arriba es porque NO está cargada
+en la BD (el ZIP solo respalda lo que existe). Verificar en la app:
+
+INEs del firmante (clientes.ine_url_frente/reverso):
+   ${cliente?.ine_url_frente ? '✓ frente cargado' : '✗ frente NO cargado'} | ${cliente?.ine_url_reverso ? '✓ reverso cargado' : '✗ reverso NO cargado'}
+
+INEs adicionales (cliente_ines):                  ${(cliente_ines ?? []).length} fila(s)
+Testigos en expediente_testigos:                  ${(expTestigos ?? []).length} fila(s)
+Testigos legacy en inspecciones_agenda:           ${(inspecciones ?? []).length} fila(s)
+Inversores del proyecto (expediente_inversores):  ${(invsExp ?? []).length} fila(s)
+   ↳ con certificado en catálogo:                 ${((invsExp ?? []) as any[]).filter((f) => f.inversor?.certificado_url).length}
+   ↳ con homologación CNE vigente:                ${homologDescargadas.size} archivo(s) descargado(s)
 `
   root.file('resumen.txt', resumen)
 
