@@ -10,6 +10,12 @@ export type DocumentoTipo =
   | 'fotografia' | 'evidencia_visita' | 'foto_medidor'
   | 'certificado_cre' | 'acuse_cre'
   | 'cotizacion' | 'plan_inspeccion' | 'recibo_cfe'
+  // Tipos auditables que antes faltaban en el TS pero ya existían en la
+  // BD enum. Sin esto los inspectores tenían que tagear como 'otro'
+  // y los archivos terminaban en la carpeta equivocada del ZIP.
+  | 'ine_participante' | 'certificado_inversor'
+  | 'dictamen_uvie' | 'oficio_resolutivo'
+  | 'diagrama' | 'memoria_calculo'
   | 'otro'
 export type InversorFase = 'monofasico' | 'bifasico' | 'trifasico'
 

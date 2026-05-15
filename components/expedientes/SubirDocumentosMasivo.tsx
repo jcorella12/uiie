@@ -13,22 +13,28 @@ import {
 const TIPO_LABELS: Record<DocumentoTipo, string> = {
   contrato:             'Contrato',
   plano:                'Diagrama Unifilar',
+  diagrama:             'Diagrama Unifilar',
   memoria_tecnica:      'Memoria de Cálculo',
+  memoria_calculo:      'Memoria de Cálculo',
   dictamen:             'Dictamen UVIE',
+  dictamen_uvie:        'Dictamen UVIE',
   acta:                 'Acta de Inspección FO-12',
   lista_verificacion:   'Lista DACG',
   paquete_actas_listas: 'Paquete Actas y Listas (Acta + Lista + Cotización + Plan)',
   cotizacion:           'Cotización',
   plan_inspeccion:      'Plan de Inspección',
   resolutivo:           'Oficio Resolutivo CFE',
+  oficio_resolutivo:    'Oficio Resolutivo CFE',
   ficha_pago:           'Ficha de Pago (Resolutivo)',
-  comprobante_pago:     'Comprobante de Pago',
+  comprobante_pago:     'Comprobante de Pago Medidor / Infraestructura CFE',
   recibo_cfe:           'Recibo CFE',
   fotografia:           'Fotografía',
   evidencia_visita:     'Foto Evidencia de Visita',
   foto_medidor:         'Foto del Medidor',
   certificado_cre:      'Certificado CNE',
   acuse_cre:            'Acuse CNE',
+  certificado_inversor: 'Certificado del Inversor (UL1741 / IEEE / Ficha técnica)',
+  ine_participante:     'Identificación INE (firmante / testigo / atiende)',
   otro:                 'Otro',
 }
 
@@ -39,6 +45,9 @@ const TIPOS_LISTA: DocumentoTipo[] = [
   'acta', 'lista_verificacion', 'cotizacion', 'plan_inspeccion',
   'resolutivo', 'ficha_pago', 'comprobante_pago', 'recibo_cfe',
   'dictamen', 'plano', 'memoria_tecnica', 'contrato',
+  // Tipos auditables agregados — para que el inspector pueda elegir
+  // explícitamente y los archivos vayan a la carpeta correcta del ZIP.
+  'certificado_inversor', 'ine_participante',
   'evidencia_visita', 'foto_medidor', 'fotografia',
   'certificado_cre', 'acuse_cre', 'otro',
 ]
@@ -87,21 +96,32 @@ interface Props {
 
 function smartTipo(file: File): DocumentoTipo {
   const name = file.name.toLowerCase()
+
+  // ── Reglas de alta prioridad (deben evaluarse antes que las de imagen) ──
+  // INE / identificaciones — antes de fotografía genérica para que los .jpg
+  // de credenciales no caigan en "fotografia".
+  if (/\b(ine|credencial|identif)/i.test(name))                      return 'ine_participante'
+  // Certificados de inversor (PDF o imagen) — antes de fotografía.
+  if (/\b(certif|cert\b|ul ?1741|ieee ?1547|homolog)/i.test(name))   return 'certificado_inversor'
+  if (/(ficha|datasheet|spec).{0,15}(inv|panel|m[oó]dulo)/i.test(name)) return 'certificado_inversor'
+
   if (/paquete|actas.*listas|listas.*actas|acta.*lista.*cotiz|escaneo.*completo/.test(name)) return 'paquete_actas_listas'
-  // Fotos específicas (van antes del fallback de fotografía genérica)
+
+  // Fotos específicas (antes del fallback de fotografía genérica)
   if (file.type.startsWith('image/') && /selfie|evidencia|inspector|fachada/.test(name)) return 'evidencia_visita'
   if (file.type.startsWith('image/') && /medidor|kwh|cfe.*medidor/.test(name))           return 'foto_medidor'
   if (file.type.startsWith('image/')) return 'fotografia'
+
   if (name.includes('acta') || /fo.?12/.test(name))                  return 'acta'
   if (name.includes('cotiza'))                                       return 'cotizacion'
   if (/plan.*inspec|plan.*visita/.test(name))                        return 'plan_inspeccion'
   if (/recibo.*cfe|recibo.*luz|cfe.*recibo/.test(name))              return 'recibo_cfe'
-  if (/comprob.*pago|deposito|pago.*cfe/.test(name))                 return 'comprobante_pago'
+  if (/comprob.*pago|deposito|pago.*cfe|pago.*medidor/.test(name))   return 'comprobante_pago'
   if (name.includes('unifilar') || name.includes('diagrama')) return 'plano'
   if (name.includes('memoria') || name.includes('calculo') || name.includes('cálculo')) return 'memoria_tecnica'
   if (name.includes('plano'))                                 return 'plano'
   if (name.includes('contrato'))                              return 'contrato'
-  if (name.includes('resolutivo'))                            return 'resolutivo'
+  if (name.includes('resolutivo') || name.includes('oficio')) return 'resolutivo'
   if (name.includes('dictamen') || name.includes('uvie'))     return 'dictamen'
   if (name.includes('lista') || name.includes('verificacion'))return 'lista_verificacion'
   return 'otro'

@@ -41,9 +41,13 @@ const FOLDER_INFORME    = '9. INFORME DE INSPECCIÓN'
 const FOLDER_OPE        = '10. OPE'
 
 const FOLDER_BY_TIPO: Record<string, string> = {
-  // 1. Oficio Resolutivo CFE
+  // 1. Oficio Resolutivo CFE — incluye también el comprobante/ficha de pago
+  //    del medidor o de la infraestructura CFE, porque son parte del trámite
+  //    del resolutivo, no de la cotización del servicio CIAE.
   resolutivo:           FOLDER_OFICIO,
   oficio_resolutivo:    FOLDER_OFICIO,
+  comprobante_pago:     FOLDER_OFICIO,
+  ficha_pago:           FOLDER_OFICIO,
   // 2. Dictamen de Verificación
   dictamen:             FOLDER_DICTAMEN,
   dictamen_uvie:        FOLDER_DICTAMEN,
@@ -57,16 +61,19 @@ const FOLDER_BY_TIPO: Record<string, string> = {
   // 5. Fotografías de instalación
   fotografia:           FOLDER_FOTOS,
   evidencia_visita:     FOLDER_FOTOS,
+  foto_medidor:         FOLDER_FOTOS,
   // 6. Identificaciones (INEs)
   ine_participante:     FOLDER_IDS,
   // 7. Documentos (acta, lista, contrato, recibos, etc.)
   acta:                 FOLDER_DOCS,
   lista_verificacion:   FOLDER_DOCS,
+  paquete_actas_listas: FOLDER_DOCS,
   contrato:             FOLDER_DOCS,
   recibo_cfe:           FOLDER_DOCS,
+  plan_inspeccion:      FOLDER_DOCS,
   otro:                 FOLDER_DOCS,
-  // 8. Cotización / factura
-  ficha_pago:           FOLDER_COTIZACION,
+  // 8. Cotización / factura — solo la cotización del servicio CIAE
+  cotizacion:           FOLDER_COTIZACION,
   // 9. Informe de inspección — se genera automáticamente con
   //    generarInformeInspeccionDocx() más abajo y se inserta en el ZIP.
   // 10. OPE (certificado CRE + acuse)
@@ -76,6 +83,55 @@ const FOLDER_BY_TIPO: Record<string, string> = {
 
 function carpetaParaTipo(tipo: string): string {
   return FOLDER_BY_TIPO[tipo] ?? FOLDER_DOCS
+}
+
+/**
+ * Re-clasifica un documento por NOMBRE cuando el `tipo` registrado en BD es
+ * demasiado genérico ("otro", "fotografia", "evidencia_visita"). Sin esto,
+ * los inspectores que suben INEs/certs/fichas como "Otro" en la UI hacen
+ * que esos archivos terminen en "7. DOCUMENTOS" en vez de "6. IDENTIFICACIONES"
+ * o "4. CERTIFICADO INVERSOR" — perdiendo la auditabilidad CRE-compliant.
+ *
+ * Reglas pensadas para los nombres reales que ya están en BD:
+ *  - "Certificado UL1741 SOLIS …", "CERTFICADO INVERSOR" → 4. CERTIFICADO
+ *  - "Ficha técnica inversor …", "ficha técnica panel …" → 4. CERTIFICADO
+ *  - "INE Juan Pérez", "Identificación …", "Credencial …" → 6. IDENTIFICACIONES
+ *  - "Diagrama unifilar …", "DU …", "Plano eléctrico …" → 3. DU y MDC
+ *  - "Memoria de cálculo …", "MDC …" → 3. DU y MDC
+ *  - "Dictamen UVIE …" → 2. DICTAMEN
+ *  - "Resolutivo CFE …", "Oficio resolutivo …" → 1. OFICIO
+ *  - "Comprobante de pago …", "Ficha de pago medidor …" → 1. OFICIO
+ */
+function reclasificarPorNombre(tipo: string, nombre: string): string {
+  // Si el tipo ya es específico, respetarlo
+  const esGenerico = tipo === 'otro' || tipo === 'fotografia' || tipo === 'evidencia_visita'
+  if (!esGenerico) return carpetaParaTipo(tipo)
+
+  const n = (nombre ?? '').toLowerCase()
+
+  // 6. IDENTIFICACIONES — credenciales y INEs
+  if (/\b(ine|credencial|identif)/i.test(n)) return FOLDER_IDS
+
+  // 4. CERTIFICADO INVERSOR — certificados, fichas técnicas y oficios CNE
+  if (/\b(certif|cert\b|ul ?1741|ieee ?1547|homolog|oficio.*cne|cne.*oficio)/i.test(n)) return FOLDER_CERT_INV
+  if (/(ficha|datasheet|spec).{0,15}(inv|panel|m[oó]dulo)/i.test(n)) return FOLDER_CERT_INV
+
+  // 3. DU y MDC
+  if (/(diagrama|unifilar|du[\s_-]|^du$|plano.*el[eé]ct)/i.test(n)) return FOLDER_DU_MDC
+  if (/(memoria.*c[aá]lculo|mdc[\s_-]|memoria.*t[eé]c)/i.test(n)) return FOLDER_DU_MDC
+
+  // 2. DICTAMEN
+  if (/dictamen|uvie|dvnp/i.test(n)) return FOLDER_DICTAMEN
+
+  // 1. OFICIO RESOLUTIVO + comprobantes de pago al CFE
+  if (/(resolutivo|oficio.*cfe|cfe.*oficio)/i.test(n)) return FOLDER_OFICIO
+  if (/(comprob.*pago|ficha.*pago|deposito|pago.*medidor|pago.*cfe)/i.test(n)) return FOLDER_OFICIO
+
+  // 5. FOTOGRAFÍAS — si el tipo es fotografia/evidencia y no matchea nada de
+  // arriba, va a fotos. Si es 'otro' sin match, va al default DOCUMENTOS.
+  if (tipo === 'fotografia' || tipo === 'evidencia_visita') return FOLDER_FOTOS
+
+  return FOLDER_DOCS
 }
 
 function safeName(s: string): string {
@@ -204,7 +260,11 @@ export async function GET(
       if (!file) continue
       const buffer = await file.arrayBuffer()
 
-      const carpeta = carpetaParaTipo(doc.tipo)
+      // Reclasificación inteligente: si el tipo es genérico ('otro' / 'fotografia'),
+      // tratamos de adivinar el folder real por el nombre del archivo. Así un
+      // "Certificado UL1741 SOLIS" subido como 'Otro' termina en CERTIFICADO
+      // INVERSOR y no perdido en DOCUMENTOS.
+      const carpeta = reclasificarPorNombre(doc.tipo, doc.nombre)
       const ext = doc.storage_path.split('.').pop() ?? ''
       const nombreSafe = safeName(doc.nombre).replace(/\.[^.]+$/, '')
       const filename = `${nombreSafe}${ext ? '.' + ext : ''}`
