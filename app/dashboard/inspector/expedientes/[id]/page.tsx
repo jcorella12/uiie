@@ -12,6 +12,7 @@ import RevisionSection from '@/components/expedientes/RevisionSection'
 import EnviarRevisionCTA from '@/components/expedientes/EnviarRevisionCTA'
 import EditarFolioBtn from '@/components/expedientes/EditarFolioBtn'
 import EliminarExpedienteBtn from '@/components/expedientes/EliminarExpedienteBtn'
+import PrecioExpedienteCard from '@/components/expedientes/PrecioExpedienteCard'
 import ContactarClienteBtn from '@/components/expedientes/ContactarClienteBtn'
 import EliminarInspeccionBtn from '@/components/agenda/EliminarInspeccionBtn'
 import DescargarRespaldoZip from '@/components/expedientes/DescargarRespaldoZip'
@@ -174,7 +175,7 @@ export default async function ExpedienteDetailPage({
       .order('created_at', { ascending: false }),
     db
       .from('solicitudes_folio')
-      .select('precio_propuesto')
+      .select('precio_propuesto, precio_historial')
       .eq('folio_asignado_id', (expediente as any).folio_id)
       .maybeSingle(),
     db
@@ -516,6 +517,16 @@ export default async function ExpedienteDetailPage({
           readOnly={['cerrado', 'aprobado'].includes(expediente.status)}
         />
       </CollapsibleCard>
+
+      {/* ── Precio del expediente — editable después de asignar folio ── */}
+      {!sinFolioAsignado && (
+        <PrecioExpedienteCard
+          expedienteId={params.id}
+          precioActual={(solicitudPrecio as any)?.precio_propuesto ?? null}
+          historial={(solicitudPrecio as any)?.precio_historial ?? []}
+          readOnly={expediente.status === 'cerrado'}
+        />
+      )}
 
       {/* ── Sección 2: Agenda de Inspecciones ── */}
       <Section
