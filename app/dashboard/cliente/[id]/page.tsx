@@ -114,6 +114,7 @@ export default async function ProyectoDetalleCliente({
       cli_inversor_id,
       cli_marca_inversor, cli_modelo_inversor, cli_capacidad_kw, cli_num_inversores,
       cli_num_medidor, cli_direccion, cli_notas, cli_completado_at,
+      correo_cfe,
       folio:folios_lista_control(numero_folio),
       inversor:inversores!expedientes_inversor_id_fkey(marca, modelo, potencia_kw),
       inspector:usuarios!inspector_id(nombre, apellidos, email, telefono),

@@ -514,6 +514,8 @@ export default async function ExpedienteDetailPage({
           testigo1={((expedienteTestigos ?? []).find((t: any) => t.orden === 1)?.testigo ?? null) as any}
           testigo2={((expedienteTestigos ?? []).find((t: any) => t.orden === 2)?.testigo ?? null) as any}
           testigos={(testigosCatalogo ?? []) as any[]}
+          // Correo CFE: usa el del expediente; si está vacío, fallback al del cliente.
+          correoCfe={(expediente as any).correo_cfe ?? (cliente as any)?.correo_cfe ?? null}
           readOnly={['cerrado', 'aprobado'].includes(expediente.status)}
         />
       </CollapsibleCard>

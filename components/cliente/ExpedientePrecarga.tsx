@@ -23,6 +23,8 @@ interface SavedData {
   cli_direccion?:         string | null
   cli_notas?:             string | null
   cli_completado_at?:     string | null
+  /** Correo CFE del expediente (editable por el cliente). */
+  correo_cfe?:            string | null
 }
 
 interface ClienteDoc {
@@ -86,6 +88,7 @@ export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clie
     cli_num_medidor:       saved?.cli_num_medidor       ?? '',
     cli_direccion:         saved?.cli_direccion         ?? '',
     cli_notas:             saved?.cli_notas             ?? '',
+    correo_cfe:            saved?.correo_cfe            ?? '',
   })
   const [saving,      setSaving]      = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -134,6 +137,7 @@ export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clie
           cli_num_medidor:       form.cli_num_medidor       || null,
           cli_direccion:         form.cli_direccion         || null,
           cli_notas:             form.cli_notas             || null,
+          correo_cfe:            form.correo_cfe            || null,
         }),
       })
 
@@ -254,6 +258,7 @@ export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clie
               )}
               {saved?.cli_num_medidor && <div className="col-span-2"><p className="label text-xs">Número de medidor CFE</p><p className="text-gray-800">{saved.cli_num_medidor}</p></div>}
               {saved?.cli_direccion && <div className="col-span-2"><p className="label text-xs">Dirección</p><p className="text-gray-800">{saved.cli_direccion}</p></div>}
+              {saved?.correo_cfe && <div className="col-span-2"><p className="label text-xs">Correo CFE</p><p className="text-gray-800">{saved.correo_cfe}</p></div>}
               {saved?.cli_notas && <div className="col-span-2"><p className="label text-xs">Notas</p><p className="text-gray-800 whitespace-pre-wrap">{saved.cli_notas}</p></div>}
             </div>
           </div>
@@ -343,6 +348,22 @@ export default function ExpedientePrecarga({ expedienteId, isLocked, saved, clie
           <div>
             <label className="label">Dirección completa de la instalación</label>
             <input className="input-field" placeholder="Calle, número, colonia, municipio, estado" value={form.cli_direccion} onChange={set('cli_direccion')} />
+          </div>
+          {/* Correo CFE — al cual se envía el certificado. Se sincroniza con la
+              vista del inspector en "Información Complementaria". */}
+          <div>
+            <label className="label">Correo CFE para envío del certificado</label>
+            <input
+              type="email"
+              className="input-field"
+              placeholder="contacto-zona@cfe.mx"
+              value={form.correo_cfe}
+              onChange={set('correo_cfe')}
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              El certificado se enviará a este correo. Si el contacto cambia, actualízalo aquí
+              y avisa al inspector.
+            </p>
           </div>
           <div>
             <label className="label">Notas adicionales</label>

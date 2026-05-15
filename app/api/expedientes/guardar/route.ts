@@ -36,6 +36,8 @@ const CAMPOS_EXPEDIENTE = [
   'tiene_interruptor_exclusivo',
   'tiene_ccfp',
   'tiene_proteccion_respaldo',
+  // Correo CFE para envío del certificado (editable por inspector y cliente)
+  'correo_cfe',
 ] as const
 
 export async function PATCH(req: NextRequest) {

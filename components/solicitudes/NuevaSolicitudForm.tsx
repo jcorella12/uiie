@@ -62,6 +62,9 @@ export default function NuevaSolicitudForm({
   // ── Notas ──
   const [notasInspector, setNotasInspector] = useState('')
 
+  // ── Correo CFE para envío del certificado (editable después por inspector y cliente) ──
+  const [correoCfe, setCorreoCfe] = useState('')
+
   // ── UI ──
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -138,6 +141,7 @@ export default function NuevaSolicitudForm({
       requiere_autorizacion: necesitaAuth,
       status,
       notas_inspector: notasInspector.trim() || null,
+      correo_cfe: correoCfe.trim() || null,
     })
 
     if (insertError) {
@@ -463,7 +467,23 @@ export default function NuevaSolicitudForm({
         )}
       </div>
 
-      {/* ── SECCIÓN 5: Notas ── */}
+      {/* ── SECCIÓN 5: Correo CFE (opcional ahora — editable después) ── */}
+      <div className="card">
+        <label className="label">Correo CFE para envío del certificado</label>
+        <input
+          type="email"
+          className="input-field"
+          placeholder="contacto-zona@cfe.mx"
+          value={correoCfe}
+          onChange={(e) => setCorreoCfe(e.target.value)}
+        />
+        <p className="text-xs text-gray-400 mt-1">
+          Aparecerá en "Información Complementaria" del expediente. Tanto tú como el cliente lo
+          podrán cambiar después si el contacto cambia.
+        </p>
+      </div>
+
+      {/* ── SECCIÓN 6: Notas ── */}
       <div className="card">
         <label className="label">Notas adicionales (opcional)</label>
         <textarea className="input-field resize-none" rows={3}

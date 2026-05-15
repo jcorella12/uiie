@@ -42,6 +42,8 @@ interface Props {
   testigo1?: TestigoInfo | null
   testigo2?: TestigoInfo | null
   testigos: TestigoInfo[]
+  /** Correo CFE del expediente (sobreescribe clientes.correo_cfe). */
+  correoCfe?: string | null
   readOnly?: boolean
 }
 
@@ -476,6 +478,7 @@ export default function InfoComplementariaForm({
   testigo1: initialTestigo1,
   testigo2: initialTestigo2,
   testigos,
+  correoCfe: initialCorreoCfe,
   readOnly = false,
 }: Props) {
   const router = useRouter()
@@ -631,6 +634,56 @@ export default function InfoComplementariaForm({
   const testigoNombre = (t: TestigoInfo) =>
     `${t.nombre}${t.apellidos ? ' ' + t.apellidos : ''}`
 
+  // ── Correo CFE — vive en `expedientes.correo_cfe`, no en `clientes` ──────
+  // Se persiste con su propio PATCH (independiente del autosave del cliente)
+  // porque cada expediente puede tener un correo CFE distinto.
+  const [correoCfe, setCorreoCfe] = useState<string>(initialCorreoCfe ?? '')
+  const [correoCfeStatus, setCorreoCfeStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const correoCfeDirtyRef = useRef(false)
+  const correoCfeTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  useEffect(() => { setCorreoCfe(initialCorreoCfe ?? '') }, [initialCorreoCfe])
+
+  async function saveCorreoCfe(valor: string) {
+    if (readOnly) return
+    setCorreoCfeStatus('saving')
+    try {
+      const res = await fetch('/api/expedientes/guardar', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          expediente_id: expedienteId,
+          correo_cfe: valor.trim() || null,
+        }),
+      })
+      if (!res.ok) {
+        const d = await res.json()
+        throw new Error(d.error ?? 'Error al guardar')
+      }
+      setCorreoCfeStatus('saved')
+      router.refresh()
+      setTimeout(() => setCorreoCfeStatus(prev => prev === 'saved' ? 'idle' : prev), 2000)
+    } catch (err: any) {
+      setError(err.message)
+      setCorreoCfeStatus('error')
+    }
+  }
+
+  useEffect(() => {
+    if (!correoCfeDirtyRef.current) {
+      correoCfeDirtyRef.current = true
+      return
+    }
+    if (correoCfeTimeoutRef.current) clearTimeout(correoCfeTimeoutRef.current)
+    correoCfeTimeoutRef.current = setTimeout(() => {
+      saveCorreoCfe(correoCfe)
+    }, 1500)
+    return () => {
+      if (correoCfeTimeoutRef.current) clearTimeout(correoCfeTimeoutRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [correoCfe])
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -726,6 +779,39 @@ export default function InfoComplementariaForm({
               disabled={readOnly}
               saving={savingT === 2}
             />
+          </div>
+        </div>
+
+        {/* Correo CFE — al cual se enviará el certificado */}
+        <div className="rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex items-center justify-between gap-2">
+            <span className="text-xs font-semibold text-gray-600">
+              Correo CFE — destinatario del certificado
+            </span>
+            {correoCfeStatus === 'saving' && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-gray-500">
+                <Loader2 className="w-3 h-3 animate-spin" /> Guardando…
+              </span>
+            )}
+            {correoCfeStatus === 'saved' && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600">
+                <CheckCircle2 className="w-3 h-3" /> Guardado
+              </span>
+            )}
+          </div>
+          <div className="p-4">
+            <input
+              type="email"
+              value={correoCfe}
+              onChange={e => setCorreoCfe(e.target.value)}
+              disabled={readOnly}
+              placeholder="contacto-zona@cfe.mx"
+              className={inputCls}
+            />
+            <p className="text-xs text-gray-400 mt-1.5">
+              Editable por inspector y cliente. Si cambia el contacto en CFE, actualiza aquí
+              y los próximos envíos se harán al nuevo correo.
+            </p>
           </div>
         </div>
 

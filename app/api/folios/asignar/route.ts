@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const { data: solicitud, error: solError } = await supabase
       .from('solicitudes_folio')
       .select(`
-        id, cliente_id, cliente_epc_id, cliente_nombre, propietario_nombre, kwp, ciudad, estado_mx, fecha_estimada, status, inspector_id, inspector_ejecutor_id,
+        id, cliente_id, cliente_epc_id, cliente_nombre, propietario_nombre, kwp, ciudad, estado_mx, fecha_estimada, status, inspector_id, inspector_ejecutor_id, correo_cfe,
         inspector:usuarios!inspector_id(nombre, apellidos, email)
       `)
       .eq('id', solicitudId)
@@ -103,6 +103,9 @@ export async function POST(request: NextRequest) {
       estado_mx:    solicitud.estado_mx ?? null,
       fecha_inicio: solicitud.fecha_estimada ?? new Date().toISOString().slice(0, 10),
       status:       'en_proceso',
+      // Correo CFE capturado en la solicitud — el inspector y el cliente lo
+      // pueden cambiar después desde "Información Complementaria"/portal.
+      correo_cfe:   (solicitud as any).correo_cfe ?? null,
     }
     // Prefer the EPC client (cliente_epc_id) — that's now the true client of CIAE
     // Fall back to cliente_id for legacy records
@@ -119,7 +122,7 @@ export async function POST(request: NextRequest) {
     // preservamos toda la info técnica que ya cargó.
     const { data: borradorExistente } = await supabase
       .from('expedientes')
-      .select('id, status')
+      .select('id, status, correo_cfe')
       .eq('solicitud_origen_id', solicitudId)
       .is('folio_id', null)
       .maybeSingle()
@@ -133,6 +136,12 @@ export async function POST(request: NextRequest) {
         // Preservamos status del borrador si ya lo movió el inspector,
         // pero si seguía en 'borrador' lo subimos a 'en_proceso'
         ...(borradorExistente.status === 'borrador' ? { status: 'en_proceso' } : {}),
+        // Si la solicitud trae correo CFE y el borrador no tenía uno, lo
+        // copiamos. Si el borrador ya tenía algo (el inspector lo capturó
+        // previamente), respetamos ese valor.
+        ...((solicitud as any).correo_cfe && !borradorExistente.correo_cfe
+          ? { correo_cfe: (solicitud as any).correo_cfe }
+          : {}),
       }
       const { error: updErr } = await supabase
         .from('expedientes')

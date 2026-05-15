@@ -23,6 +23,7 @@ export async function POST(req: NextRequest) {
     cli_num_medidor,
     cli_direccion,
     cli_notas,
+    correo_cfe,    // editable por el cliente desde su portal
   } = body
 
   if (!expediente_id) {
@@ -54,23 +55,32 @@ export async function POST(req: NextRequest) {
 
   // Actualizar con service client para omitir RLS
   const serviceClient = await createServiceClient()
+  const updatePayload: Record<string, any> = {
+    cli_marca_paneles:     cli_marca_paneles     ?? null,
+    cli_modelo_paneles:    cli_modelo_paneles    ?? null,
+    cli_num_paneles:       cli_num_paneles       ?? null,
+    cli_potencia_panel_wp: cli_potencia_panel_wp ?? null,
+    cli_inversor_id:       cli_inversor_id       ?? null,
+    cli_marca_inversor:    cli_marca_inversor    ?? null,
+    cli_modelo_inversor:   cli_modelo_inversor   ?? null,
+    cli_capacidad_kw:      cli_capacidad_kw      ?? null,
+    cli_num_inversores:    cli_num_inversores    ?? null,
+    cli_num_medidor:       cli_num_medidor       ?? null,
+    cli_direccion:         cli_direccion         ?? null,
+    cli_notas:             cli_notas             ?? null,
+    cli_completado_at:     new Date().toISOString(),
+  }
+  // correo_cfe: solo lo escribimos si vino en el body. Así el cliente puede
+  // dejarlo intacto en otras llamadas (no se borra accidentalmente).
+  if (correo_cfe !== undefined) {
+    updatePayload.correo_cfe = (typeof correo_cfe === 'string' && correo_cfe.trim())
+      ? correo_cfe.trim()
+      : null
+  }
+
   const { error } = await serviceClient
     .from('expedientes')
-    .update({
-      cli_marca_paneles:     cli_marca_paneles     ?? null,
-      cli_modelo_paneles:    cli_modelo_paneles    ?? null,
-      cli_num_paneles:       cli_num_paneles       ?? null,
-      cli_potencia_panel_wp: cli_potencia_panel_wp ?? null,
-      cli_inversor_id:       cli_inversor_id       ?? null,
-      cli_marca_inversor:    cli_marca_inversor    ?? null,
-      cli_modelo_inversor:   cli_modelo_inversor   ?? null,
-      cli_capacidad_kw:      cli_capacidad_kw      ?? null,
-      cli_num_inversores:    cli_num_inversores    ?? null,
-      cli_num_medidor:       cli_num_medidor       ?? null,
-      cli_direccion:         cli_direccion         ?? null,
-      cli_notas:             cli_notas             ?? null,
-      cli_completado_at:     new Date().toISOString(),
-    })
+    .update(updatePayload)
     .eq('id', expediente_id)
 
   if (error) {
