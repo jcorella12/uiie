@@ -2,10 +2,13 @@ import { redirect } from 'next/navigation'
 import { createClient, createServiceClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import { Award, Download, Search, MapPin, Calendar, FolderOpen } from 'lucide-react'
+import { parseDBDate } from '@/lib/utils'
 
 function fmtDate(iso: string | null) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })
+  // parseDBDate evita el corrimiento de día cuando `fecha_emision` viene como
+  // YYYY-MM-DD (DATE) y se interpretaría como UTC.
+  return parseDBDate(iso).toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
 export default async function InspectorCertificadosPage({

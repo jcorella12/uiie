@@ -97,21 +97,41 @@ export function offsetForDateInTz(date: Date, tz: string): string {
   return `${sign}${hh}:${mm}`
 }
 
-export function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('es-MX', {
+/**
+ * Convierte un valor de la BD a un Date "estable" para mostrar.
+ *
+ * Postgres `DATE` (sin hora) llega como `'2026-03-25'`. Si lo pasas a
+ * `new Date('2026-03-25')`, JavaScript lo interpreta como medianoche UTC,
+ * y al formatear en CDMX (UTC-6) muestra el día anterior. Solución:
+ * detectamos el formato date-only y le anclamos `T12:00:00` para que
+ * cualquier zona horaria entre -11 y +11 muestre el mismo calendario.
+ *
+ * Para fechas con hora (`'…T…Z'` o `'…T…+…'`) se respeta la zona como viene.
+ */
+export function parseDBDate(value: string | Date): Date {
+  if (value instanceof Date) return value
+  // YYYY-MM-DD exacto, sin hora ni TZ
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return new Date(`${value}T12:00:00`)
+  }
+  return new Date(value)
+}
+
+export function formatDate(dateStr: string, tz: string = TZ_MX): string {
+  return parseDBDate(dateStr).toLocaleDateString('es-MX', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-    timeZone: TZ_MX,
+    timeZone: tz,
   })
 }
 
-export function formatDateShort(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString('es-MX', {
+export function formatDateShort(dateStr: string, tz: string = TZ_MX): string {
+  return parseDBDate(dateStr).toLocaleDateString('es-MX', {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-    timeZone: TZ_MX,
+    timeZone: tz,
   })
 }
 

@@ -17,13 +17,13 @@ import path from 'path'
 import fs from 'fs'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { InformeData } from '@/lib/docx/InformeInspeccionDocx'
-import { TZ_MX, tzForEstadoMx } from '@/lib/utils'
+import { TZ_MX, tzForEstadoMx, parseDBDate } from '@/lib/utils'
 
 // ─── Helpers de fecha ───────────────────────────────────────────────────────
 
 function fmtFecha(iso: string | null | undefined, tz: string = TZ_MX): string {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('es-MX', {
+  return parseDBDate(iso).toLocaleDateString('es-MX', {
     year: 'numeric', month: 'long', day: 'numeric', timeZone: tz,
   })
 }

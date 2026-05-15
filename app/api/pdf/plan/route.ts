@@ -10,10 +10,10 @@ function getLogoPath(): string | undefined {
   return fs.existsSync(p) ? p : undefined
 }
 
-import { TZ_MX, isoMinusDays, tzForEstadoMx } from '@/lib/utils'
+import { TZ_MX, isoMinusDays, tzForEstadoMx, parseDBDate } from '@/lib/utils'
 
 function fmtFecha(iso: string, tz: string = TZ_MX): string {
-  return new Date(iso).toLocaleDateString('es-MX', {
+  return parseDBDate(iso).toLocaleDateString('es-MX', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
