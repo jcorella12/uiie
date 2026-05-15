@@ -41,15 +41,19 @@ export async function POST(req: NextRequest) {
   }
 
   const admin = await createServiceClient()
-  // Whitelist de orígenes permitidos — evita open redirect
+  // Whitelist de orígenes permitidos — evita open redirect.
+  // En producción NUNCA permitimos localhost: si un inspector dispara la
+  // invitación desde su entorno local (npm run dev), el correo aún debe
+  // llevar al cliente a app.uiie.com.mx, no a la laptop del inspector.
+  const PROD_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://app.uiie.com.mx'
+  const isProd = process.env.NODE_ENV === 'production'
   const ALLOWED_ORIGINS = [
-    process.env.NEXT_PUBLIC_SITE_URL,
-    'http://localhost:3000',
-    'http://localhost:3001',
-  ].filter(Boolean) as string[]
+    PROD_URL,
+    ...(!isProd ? ['http://localhost:3000', 'http://localhost:3001'] : []),
+  ]
   const safeOrigin = ALLOWED_ORIGINS.includes(origin ?? '')
     ? origin!
-    : (process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000')
+    : PROD_URL
   const redirectTo = `${safeOrigin}/auth/callback?next=/dashboard/cliente`
 
   // ── Acción: invite — crea cuenta y envía correo ─────────────────────────────
