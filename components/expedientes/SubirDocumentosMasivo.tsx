@@ -671,7 +671,7 @@ function ReciboCFEItem({ qf, expedienteId, onRemove, onUpdate, onRefresh }: {
 
 // ─── Normal / IA-key item ─────────────────────────────────────────────────────
 
-function NormalItem({ qf, expedienteId, onChange, onCustomName, onRemove, onUpdate, onRefresh }: {
+function NormalItem({ qf, expedienteId, onChange, onCustomName, onRemove, onUpdate, onRefresh, onRetry }: {
   qf: QueueFile
   expedienteId: string
   onChange: (t: DocumentoTipo) => void
@@ -679,6 +679,7 @@ function NormalItem({ qf, expedienteId, onChange, onCustomName, onRemove, onUpda
   onRemove: () => void
   onUpdate: (u: Partial<QueueFile>) => void
   onRefresh: () => void
+  onRetry: () => void
 }) {
   const isKey = qf.specialType === 'ia_key'
   const requireCustomName = qf.tipo === 'otro'
@@ -761,7 +762,9 @@ function NormalItem({ qf, expedienteId, onChange, onCustomName, onRemove, onUpda
         </span>
       ) : (
         <select value={qf.tipo} onChange={e => onChange(e.target.value as DocumentoTipo)}
-          disabled={qf.status !== 'pending'}
+          // Permitimos cambiar el tipo también en estado 'error' — al cambiarlo
+          // el item regresa a 'pending' (changeTipo limpia el error).
+          disabled={qf.status !== 'pending' && qf.status !== 'error'}
           className="text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white text-gray-700 focus:outline-none focus:ring-1 focus:ring-brand-green disabled:opacity-50 flex-shrink-0 max-w-[165px]">
           {TIPOS_LISTA.map(t => <option key={t} value={t}>{TIPO_LABELS[t]}</option>)}
         </select>
@@ -769,12 +772,16 @@ function NormalItem({ qf, expedienteId, onChange, onCustomName, onRemove, onUpda
 
       {/* Status icon */}
       <div className="flex-shrink-0 w-5 flex items-center justify-center">
-        {qf.status === 'pending' && !qf.applied && (
-          <button onClick={onRemove} className="text-gray-300 hover:text-red-400"><X className="w-4 h-4" /></button>
+        {(qf.status === 'pending' || qf.status === 'error') && !qf.applied && (
+          <button onClick={onRemove} className="text-gray-300 hover:text-red-400" title="Quitar de la lista">
+            <X className="w-4 h-4" />
+          </button>
         )}
         {qf.status === 'uploading'  && <Loader2 className="w-4 h-4 text-brand-green animate-spin" />}
         {(qf.status === 'done' || qf.applied) && <CheckCircle className="w-4 h-4 text-green-500" />}
-        {qf.status === 'error' && <span title={qf.error} className="cursor-help"><AlertTriangle className="w-4 h-4 text-red-500" /></span>}
+        {qf.status === 'error' && qf.applied && (
+          <span title={qf.error} className="cursor-help"><AlertTriangle className="w-4 h-4 text-red-500" /></span>
+        )}
       </div>
       </div>
 
@@ -792,8 +799,9 @@ function NormalItem({ qf, expedienteId, onChange, onCustomName, onRemove, onUpda
         </div>
       )}
 
-      {/* Campo custom para "Otro" */}
-      {requireCustomName && qf.status === 'pending' && (
+      {/* Campo custom para "Otro" — visible también en error para que el usuario
+          pueda corregir el nombre faltante sin tener que quitar y re-agregar el archivo. */}
+      {requireCustomName && (qf.status === 'pending' || qf.status === 'error') && !qf.applied && (
         <div className="mt-2">
           <input
             type="text"
@@ -808,6 +816,23 @@ function NormalItem({ qf, expedienteId, onChange, onCustomName, onRemove, onUpda
               Escribe un nombre descriptivo para este documento.
             </p>
           )}
+        </div>
+      )}
+
+      {/* Mensaje de error inline con botón Reintentar — mucho más visible
+          que el tooltip del icono triangular. */}
+      {qf.status === 'error' && qf.error && (
+        <div className="mt-2 flex items-start justify-between gap-2 rounded-lg border border-red-200 bg-white px-2.5 py-1.5">
+          <p className="text-[11px] text-red-700 leading-tight">
+            <strong>Error:</strong> {qf.error}
+          </p>
+          <button
+            type="button"
+            onClick={onRetry}
+            className="shrink-0 text-[11px] text-red-700 hover:text-red-900 underline underline-offset-2 font-medium"
+          >
+            Reintentar
+          </button>
         </div>
       )}
 
@@ -909,7 +934,13 @@ export default function SubirDocumentosMasivo({ expedienteId }: Props) {
   function changeTipo(id: string, tipo: DocumentoTipo) {
     const isKey = IA_KEY_TIPOS.includes(tipo)
     setQueue(prev => prev.map(q => q.id === id
-      ? { ...q, tipo, specialType: isKey ? 'ia_key' : 'none' }
+      ? {
+          ...q, tipo,
+          specialType: isKey ? 'ia_key' : 'none',
+          // Si estaba en error por tipo/nombre, limpiamos para que pueda
+          // reintentarse al cambiar el tipo.
+          ...(q.status === 'error' ? { status: 'pending' as const, error: undefined } : {}),
+        }
       : q))
   }
 
@@ -1044,10 +1075,19 @@ export default function SubirDocumentosMasivo({ expedienteId }: Props) {
                     qf={qf}
                     expedienteId={expedienteId}
                     onChange={t => changeTipo(qf.id, t)}
-                    onCustomName={n => updateItem(qf.id, { customNombre: n })}
+                    onCustomName={n => {
+                      // Si estaba en error porque faltaba el nombre, al captura
+                      // lo regresamos a 'pending' para que pueda subir.
+                      const limpiarError = qf.status === 'error' && n.trim().length > 0
+                      updateItem(qf.id, {
+                        customNombre: n,
+                        ...(limpiarError ? { status: 'pending', error: undefined } : {}),
+                      })
+                    }}
                     onRemove={() => removeItem(qf.id)}
                     onUpdate={u => updateItem(qf.id, u)}
                     onRefresh={() => router.refresh()}
+                    onRetry={() => updateItem(qf.id, { status: 'pending', error: undefined })}
                   />
                 ))}
               </div>
