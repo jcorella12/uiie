@@ -6,7 +6,11 @@
     },
     {
       "path": "/api/cron/reporte-diario",
-      "schedule": "0 1 * * *"
+      "schedule": "0 1 * * 2-5"
+    },
+    {
+      "path": "/api/cron/reporte-semanal",
+      "schedule": "0 1 * * 6"
     }
   ]
 }
