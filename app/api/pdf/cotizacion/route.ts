@@ -53,7 +53,13 @@ export async function GET(req: NextRequest) {
     ? isoMinusDays(inspeccion.fecha_hora, 2)
     : new Date().toISOString()
 
-  const precio: number = (solicitud as any)?.precio_propuesto ?? 0
+  // Preferir el precio del expediente (fuente de verdad después de los
+  // ajustes del editor "Precio del expediente"); si no hay, fallback a la
+  // solicitud original; finalmente 0.
+  const precio: number =
+    (exp as any)?.precio_propuesto
+    ?? (solicitud as any)?.precio_propuesto
+    ?? 0
   const insp = (exp as any).inspector as { nombre: string; apellidos?: string } | null
   const cliente = (exp as any).cliente as {
     nombre?: string

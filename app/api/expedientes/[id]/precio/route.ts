@@ -55,7 +55,7 @@ export async function POST(
   const db = await createServiceClient()
   const { data: exp } = await db
     .from('expedientes')
-    .select('id, folio_id, status, inspector_id, inspector_ejecutor_id')
+    .select('id, folio_id, status, inspector_id, inspector_ejecutor_id, precio_propuesto, precio_historial')
     .eq('id', params.id)
     .maybeSingle()
   if (!exp) return NextResponse.json({ error: 'Expediente no encontrado' }, { status: 404 })
@@ -68,12 +68,6 @@ export async function POST(
     }
   }
 
-  if (!exp.folio_id) {
-    return NextResponse.json({
-      error: 'El expediente aún no tiene folio asignado — el precio se captura al crear la solicitud',
-    }, { status: 422 })
-  }
-
   // No se permite cambiar precio en expedientes ya cerrados (ya facturados)
   if (exp.status === 'cerrado') {
     return NextResponse.json({
@@ -81,25 +75,16 @@ export async function POST(
     }, { status: 422 })
   }
 
-  // ── Cargar solicitud asociada ───────────────────────────────────────────────
-  const { data: sol } = await db
-    .from('solicitudes_folio')
-    .select('id, precio_propuesto, precio_historial')
-    .eq('folio_asignado_id', exp.folio_id)
-    .maybeSingle()
-  if (!sol) {
-    return NextResponse.json({
-      error: 'No se encontró la solicitud asociada al folio del expediente',
-    }, { status: 404 })
-  }
-
-  const precioAnterior = sol.precio_propuesto != null ? Number(sol.precio_propuesto) : null
+  // ── Calcular delta ──────────────────────────────────────────────────────────
+  const precioAnterior = exp.precio_propuesto != null ? Number(exp.precio_propuesto) : null
   if (precioAnterior !== null && Math.abs(precioAnterior - precio) < 0.005) {
-    // Mismo precio (con tolerancia de centavos), no hay nada que hacer
     return NextResponse.json({ ok: true, sin_cambio: true, precio })
   }
 
   // ── Actualizar precio + append a historial ──────────────────────────────────
+  // Fuente de verdad: expedientes.precio_propuesto. La solicitud asociada
+  // (si existe) también se actualiza por compatibilidad con vistas viejas
+  // (conciliación, tablero del admin) que aún la consultan.
   const nuevoEvento = {
     precio_anterior: precioAnterior,
     precio_nuevo:    precio,
@@ -108,20 +93,27 @@ export async function POST(
     rol:             u.rol,
     motivo,
   }
-  const historialActualizado = Array.isArray(sol.precio_historial)
-    ? [...sol.precio_historial, nuevoEvento]
+  const historialActualizado = Array.isArray(exp.precio_historial)
+    ? [...exp.precio_historial, nuevoEvento]
     : [nuevoEvento]
 
   const { error: upErr } = await db
-    .from('solicitudes_folio')
+    .from('expedientes')
     .update({
       precio_propuesto: precio,
       precio_historial: historialActualizado,
     })
-    .eq('id', sol.id)
-
+    .eq('id', exp.id)
   if (upErr) {
     return NextResponse.json({ error: `Error al guardar: ${upErr.message}` }, { status: 500 })
+  }
+
+  // Sync a la solicitud (no bloqueante — si falla seguimos)
+  if (exp.folio_id) {
+    await db
+      .from('solicitudes_folio')
+      .update({ precio_propuesto: precio })
+      .eq('folio_asignado_id', exp.folio_id)
   }
 
   return NextResponse.json({

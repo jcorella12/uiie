@@ -524,8 +524,15 @@ export default async function ExpedienteDetailPage({
       {!sinFolioAsignado && (
         <PrecioExpedienteCard
           expedienteId={params.id}
-          precioActual={(solicitudPrecio as any)?.precio_propuesto ?? null}
-          historial={(solicitudPrecio as any)?.precio_historial ?? []}
+          // Fuente de verdad: expedientes.precio_propuesto (escrito por el
+          // editor de precio). La solicitud original es solo respaldo para
+          // expedientes legacy.
+          precioActual={
+            (expediente as any).precio_propuesto
+            ?? (solicitudPrecio as any)?.precio_propuesto
+            ?? null
+          }
+          historial={(expediente as any).precio_historial ?? []}
           readOnly={expediente.status === 'cerrado'}
         />
       )}
@@ -879,7 +886,7 @@ export default async function ExpedienteDetailPage({
             marca_inversor:    (expediente as any).inversor ? `${(expediente as any).inversor.marca} ${(expediente as any).inversor.modelo}` : null,
             num_inversores:    expediente.num_inversores,
             numero_medidor:    expediente.numero_medidor,
-            precio:            (solicitudPrecio as any)?.precio_propuesto ?? (expediente as any).precio_propuesto ?? null,
+            precio:            (expediente as any).precio_propuesto ?? (solicitudPrecio as any)?.precio_propuesto ?? null,
             tipo_conexion:     expediente.tipo_conexion,
             tipo_central:      expediente.tipo_central,
             direccion_proyecto: expediente.direccion_proyecto,

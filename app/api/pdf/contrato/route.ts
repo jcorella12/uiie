@@ -70,7 +70,11 @@ export async function GET(req: NextRequest) {
   const cliente = exp.cliente as any
   const folio: string = (exp.folio as any)?.numero_folio ?? exp.numero_folio ?? id
 
-  const precio: number = (solicitud as any)?.precio_propuesto ?? 0
+  // Preferir el precio del expediente; fallback a la solicitud original.
+  const precio: number =
+    (exp as any)?.precio_propuesto
+    ?? (solicitud as any)?.precio_propuesto
+    ?? 0
 
   // Firmante
   const firmanteMismo   = cliente?.firmante_mismo !== false

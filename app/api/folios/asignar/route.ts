@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
     const { data: solicitud, error: solError } = await supabase
       .from('solicitudes_folio')
       .select(`
-        id, cliente_id, cliente_epc_id, cliente_nombre, propietario_nombre, kwp, ciudad, estado_mx, fecha_estimada, status, inspector_id, inspector_ejecutor_id, correo_cfe,
+        id, cliente_id, cliente_epc_id, cliente_nombre, propietario_nombre, kwp, ciudad, estado_mx, fecha_estimada, status, inspector_id, inspector_ejecutor_id, correo_cfe, precio_propuesto,
         inspector:usuarios!inspector_id(nombre, apellidos, email)
       `)
       .eq('id', solicitudId)
@@ -106,6 +106,9 @@ export async function POST(request: NextRequest) {
       // Correo CFE capturado en la solicitud — el inspector y el cliente lo
       // pueden cambiar después desde "Información Complementaria"/portal.
       correo_cfe:   (solicitud as any).correo_cfe ?? null,
+      // Precio inicial — se hereda de la solicitud y luego se puede editar
+      // desde la card "Precio del expediente".
+      precio_propuesto: (solicitud as any).precio_propuesto ?? null,
     }
     // Prefer the EPC client (cliente_epc_id) — that's now the true client of CIAE
     // Fall back to cliente_id for legacy records
@@ -122,7 +125,7 @@ export async function POST(request: NextRequest) {
     // preservamos toda la info técnica que ya cargó.
     const { data: borradorExistente } = await supabase
       .from('expedientes')
-      .select('id, status, correo_cfe')
+      .select('id, status, correo_cfe, precio_propuesto')
       .eq('solicitud_origen_id', solicitudId)
       .is('folio_id', null)
       .maybeSingle()
@@ -141,6 +144,10 @@ export async function POST(request: NextRequest) {
         // previamente), respetamos ese valor.
         ...((solicitud as any).correo_cfe && !borradorExistente.correo_cfe
           ? { correo_cfe: (solicitud as any).correo_cfe }
+          : {}),
+        // Misma lógica para el precio: solo si el borrador no tenía uno.
+        ...((solicitud as any).precio_propuesto != null && borradorExistente.precio_propuesto == null
+          ? { precio_propuesto: (solicitud as any).precio_propuesto }
           : {}),
       }
       const { error: updErr } = await supabase
