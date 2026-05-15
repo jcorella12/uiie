@@ -116,6 +116,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No se recibieron archivos INE' }, { status: 400 })
     }
 
+    // expediente_id opcional: si viene, el archivo se persiste también como
+    // `documento_expediente` (tipo='ine_participante') aunque después el
+    // inspector no complete el paso "Guardar testigo". Antes los archivos
+    // quedaban huérfanos en storage tras el OCR.
+    const expedienteId = (formData.get('expediente_id') as string | null)?.trim() || null
+
     const resultados: Array<{
       archivo: string
       ok: boolean
@@ -211,6 +217,32 @@ export async function POST(req: NextRequest) {
           if (!uploadError) storageKey = storagePath
         } catch {
           // no fatal si falla el upload; los datos OCR siguen siendo válidos
+        }
+
+        // ── Persistir como documento del expediente (si vino expediente_id) ──
+        // Sin esto, cada vez que se sube una INE para OCR el archivo quedaba
+        // flotando en storage sin referencia. Ahora queda atado al expediente
+        // como tipo `ine_participante`, así el ZIP del respaldo lo incluye en
+        // "6. IDENTIFICACIONES" aunque el inspector no complete el flujo de
+        // "Guardar testigo".
+        if (storageKey && expedienteId) {
+          try {
+            const dbAdmin = await createServiceClient()
+            const nombreCompleto = [parsed.nombre, apellidos].filter(Boolean).join(' ').trim() || archivo.name
+            await dbAdmin.from('documentos_expediente').insert({
+              expediente_id:       expedienteId,
+              nombre:              `INE - ${nombreCompleto}`,
+              tipo:                'ine_participante',
+              storage_path:        storageKey,
+              mime_type:           archivo.type || null,
+              tamano_bytes:        archivo.size || null,
+              subido_por_cliente:  false,
+            })
+          } catch (e: any) {
+            // no fatal — el OCR ya tuvo éxito; solo se pierde el respaldo
+            // automático en documentos_expediente.
+            console.warn('[importar-ines] No se pudo persistir como documento:', e?.message)
+          }
         }
 
         resultados.push({

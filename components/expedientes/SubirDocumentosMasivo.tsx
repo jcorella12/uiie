@@ -199,8 +199,9 @@ const INE_ROLES: { role: INERole; label: string; Icon: React.ElementType; esTest
   { role: 'atiende',       label: 'Quien atiende la instalación', Icon: User, esTestigo: false  },
 ]
 
-function INEItem({ qf, onRemove, onUpdate }: {
+function INEItem({ qf, expedienteId, onRemove, onUpdate }: {
   qf: QueueFile
+  expedienteId: string
   onRemove: () => void
   onUpdate: (u: Partial<QueueFile>) => void
 }) {
@@ -209,6 +210,10 @@ function INEItem({ qf, onRemove, onUpdate }: {
     try {
       const fd = new FormData()
       fd.append('ines', qf.file)
+      // Pasar expediente_id al backend para que la INE quede persistida como
+      // documento del expediente (tipo='ine_participante') automáticamente,
+      // sin depender de que después se complete el flujo "Guardar testigo".
+      fd.append('expediente_id', expedienteId)
       const res  = await fetch('/api/testigos/importar-ines', { method: 'POST', body: fd })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Error al procesar')
@@ -1069,7 +1074,7 @@ export default function SubirDocumentosMasivo({ expedienteId }: Props) {
             <div className="space-y-2">
               {specialItems.map(qf =>
                 qf.specialType === 'ine'
-                  ? <INEItem key={qf.id} qf={qf} onRemove={() => removeItem(qf.id)} onUpdate={u => updateItem(qf.id, u)} />
+                  ? <INEItem key={qf.id} qf={qf} expedienteId={expedienteId} onRemove={() => removeItem(qf.id)} onUpdate={u => updateItem(qf.id, u)} />
                   : qf.specialType === 'recibo_cfe'
                   ? <ReciboCFEItem key={qf.id} qf={qf} expedienteId={expedienteId} onRemove={() => removeItem(qf.id)} onUpdate={u => updateItem(qf.id, u)} onRefresh={() => router.refresh()} />
                   : <InversorItem key={qf.id} qf={qf} expedienteId={expedienteId} onRemove={() => removeItem(qf.id)} onUpdate={u => updateItem(qf.id, u)} onRefresh={() => router.refresh()} />
