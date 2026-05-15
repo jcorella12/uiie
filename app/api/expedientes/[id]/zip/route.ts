@@ -138,6 +138,38 @@ function safeName(s: string): string {
   return s.replace(/[/\\:*?"<>|]/g, '_').slice(0, 200)
 }
 
+/**
+ * Helper que añade archivos a una carpeta del ZIP **evitando colisiones de
+ * nombre**. Si dos archivos terminan llamándose igual (ej. dos "INE recuperada
+ * — UIIE-525-2026.pdf"), JSZip silenciosamente sobrescribe el primero —
+ * resultado: el inspector descarga el ZIP y le falta media evidencia.
+ *
+ * Esta función mantiene un set de nombres ya usados por carpeta y agrega
+ * sufijo " (2)", " (3)"… cuando hace falta. Devuelve el nombre final que
+ * realmente se escribió, útil para auditoría.
+ */
+function addFileToFolder(
+  zipFolder: JSZip | null,
+  filename: string,
+  buffer: ArrayBuffer | Buffer | Uint8Array,
+  usedNames: Set<string>,
+): string {
+  if (!zipFolder) return filename
+  const dot = filename.lastIndexOf('.')
+  const base = dot > 0 ? filename.slice(0, dot) : filename
+  const ext  = dot > 0 ? filename.slice(dot)    : ''
+
+  let candidate = filename
+  let n = 2
+  while (usedNames.has(candidate)) {
+    candidate = `${base} (${n})${ext}`
+    n++
+  }
+  usedNames.add(candidate)
+  zipFolder.file(candidate, buffer as any)
+  return candidate
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: { id: string } },
@@ -252,6 +284,14 @@ export async function GET(
   ]
   for (const c of carpetasFijas) root.folder(c)
 
+  // Track de nombres usados por carpeta — evita que dos archivos con el mismo
+  // nombre se sobreescriban dentro del ZIP (JSZip no avisa, simplemente reemplaza).
+  const usedNamesByFolder: Record<string, Set<string>> = {}
+  const namesFor = (carpeta: string) => {
+    if (!usedNamesByFolder[carpeta]) usedNamesByFolder[carpeta] = new Set()
+    return usedNamesByFolder[carpeta]
+  }
+
   // ── Agregar documentos del expediente ─────────────────────────────────────
   for (const doc of documentos ?? []) {
     if (!doc.storage_path) continue
@@ -268,7 +308,7 @@ export async function GET(
       const ext = doc.storage_path.split('.').pop() ?? ''
       const nombreSafe = safeName(doc.nombre).replace(/\.[^.]+$/, '')
       const filename = `${nombreSafe}${ext ? '.' + ext : ''}`
-      root.folder(carpeta)!.file(filename, buffer)
+      addFileToFolder(root.folder(carpeta), filename, buffer, namesFor(carpeta))
     } catch (e: any) {
       console.warn(`[zip] No se pudo agregar doc ${doc.id}:`, e?.message)
     }
@@ -287,7 +327,7 @@ export async function GET(
       const buffer = await file.arrayBuffer()
       const ext = path.split('.').pop()?.toLowerCase() ?? 'jpg'
       const filename = `${safeName(nombrePersona)}_${lado}.${ext}`
-      root.folder(FOLDER_IDS)!.file(filename, buffer)
+      addFileToFolder(root.folder(FOLDER_IDS), filename, buffer, namesFor(FOLDER_IDS))
     } catch (e: any) {
       console.warn(`[zip] No se pudo agregar INE ${path}:`, e?.message)
     }
@@ -355,7 +395,7 @@ export async function GET(
       const buf = await file.arrayBuffer()
       const ext = inv.certificado_url.split('.').pop()?.toLowerCase() ?? 'pdf'
       const filename = `Certificado_${safeName(inv.marca ?? '')}_${safeName(inv.modelo ?? '')}.${ext}`
-      root.folder(FOLDER_CERT_INV)!.file(filename, buf)
+      addFileToFolder(root.folder(FOLDER_CERT_INV), filename, buf, namesFor(FOLDER_CERT_INV))
     } catch (e: any) {
       console.warn(`[zip] No se pudo agregar cert inversor ${inv.certificado_url}:`, e?.message)
     }
@@ -376,7 +416,7 @@ export async function GET(
         const { data: file } = await db.storage.from('certificados-cne').download(storagePath)
         if (file) {
           const buf = await file.arrayBuffer()
-          root.folder(FOLDER_OPE)!.file(filename, buf)
+          addFileToFolder(root.folder(FOLDER_OPE), filename, buf, namesFor(FOLDER_OPE))
           return
         }
       } catch (e: any) {
@@ -388,7 +428,7 @@ export async function GET(
         const res = await fetch(urlExterna)
         if (res.ok) {
           const buf = await res.arrayBuffer()
-          root.folder(FOLDER_OPE)!.file(filename, buf)
+          addFileToFolder(root.folder(FOLDER_OPE), filename, buf, namesFor(FOLDER_OPE))
         }
       } catch (e: any) {
         console.warn(`[zip] No se pudo descargar ${prefijo}:`, e?.message)
@@ -418,7 +458,7 @@ export async function GET(
       if (!file) return
       const buf = await file.arrayBuffer()
       const filename = safeName(displayName || fallback)
-      root.folder(FOLDER_CERT_INV)!.file(filename, buf)
+      addFileToFolder(root.folder(FOLDER_CERT_INV), filename, buf, namesFor(FOLDER_CERT_INV))
     } catch (e: any) {
       console.warn(`[zip] No se pudo agregar homologación ${path}:`, e?.message)
     }
@@ -455,7 +495,7 @@ export async function GET(
     if (informeData) {
       const informeBuf = await generarInformeInspeccionDocx(informeData)
       const informeName = `Informe-Inspeccion-${safeName(informeData.folio)}.docx`
-      root.folder(FOLDER_INFORME)!.file(informeName, informeBuf)
+      addFileToFolder(root.folder(FOLDER_INFORME), informeName, informeBuf, namesFor(FOLDER_INFORME))
     }
   } catch (e: any) {
     console.warn('[zip] No se pudo generar el Informe de Inspección:', e?.message)
